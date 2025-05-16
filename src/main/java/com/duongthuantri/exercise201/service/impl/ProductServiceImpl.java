@@ -5,12 +5,15 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.duongthuantri.exercise201.DTO.ProductDTO;
 import com.duongthuantri.exercise201.entity.Category;
 import com.duongthuantri.exercise201.entity.Gallery;
 import com.duongthuantri.exercise201.entity.Product;
@@ -65,7 +68,8 @@ public class ProductServiceImpl implements ProductService {
             .orElseThrow(() -> new RuntimeException("Staff not found with ID: " + staffId));
             product.setCreatedBy(staff);
             product.setUpdatedBy(staff);
-
+            product.setCreatedAt(new Date());
+            product.setUpdatedAt(new Date());
             //lưu thể loại của sản phẩm
             List<UUID> idCategoryList = objectMapper.readValue(productJson.get("idCategories").traverse(), new TypeReference<List<UUID>>() {
             });
@@ -92,12 +96,25 @@ public class ProductServiceImpl implements ProductService {
                 Gallery gallery = new Gallery();
                 gallery.setProduct(newProduct);
                 gallery.setImage(image); // giữ nguyên base64
-                // gallery.setIsThumbnail(null);
+                gallery.setIsThumbnail(true);
                 gallery.setPlaceholder("placeholder-value"); // phải có hoặc cho nullable
                 gallery.setCreatedAt(new Date());
                 gallery.setUpdatedAt(new Date());
                 galleryRepository.save(gallery);
-            }   
+            }
+            //các ảnh phụ
+            List<String> imagePhuList = objectMapper.readValue(productJson.get("imagePhus").traverse(), new TypeReference<List<String>>() {
+            });
+            for (String image : imagePhuList) {
+                Gallery gallery = new Gallery();
+                gallery.setProduct(newProduct);
+                gallery.setImage(image); // giữ nguyên base64
+                gallery.setIsThumbnail(false);
+                gallery.setPlaceholder("placeholder-value"); // phải có hoặc cho nullable
+                gallery.setCreatedAt(new Date());
+                gallery.setUpdatedAt(new Date());
+                galleryRepository.save(gallery);
+            }
             //cập nhật lại ảnh cho sản phẩm
             productRepository.save(newProduct);
             
@@ -140,20 +157,35 @@ public class ProductServiceImpl implements ProductService {
             }
             updatedProduct.setProductCategories(newCategories);
 
-            // Cập nhật ảnh
+            // Cập nhật anh sản phẩm
             List<String> imageList = objectMapper.readValue(productJson.get("images").traverse(), new TypeReference<List<String>>() {});
-            // Xoá ảnh cũ
+            // Xoá toàn bộ ảnh cũ 1 lần duy nhất
             galleryRepository.deleteAllByProductId(productId);
-            // Thêm lại ảnh mới
+
+            // Thêm lại ảnh đại diện (thumbnail)
             for (String image : imageList) {
                 Gallery gallery = new Gallery();
-                gallery.setProduct(updatedProduct);
+                gallery.setProduct(existingProduct); // Dùng existingProduct
                 gallery.setImage(image);
-                gallery.setPlaceholder("placeholder-value"); // bạn có thể set theo logic
+                gallery.setIsThumbnail(true);
+                gallery.setPlaceholder("thumbnail");
                 gallery.setCreatedAt(new Date());
                 gallery.setUpdatedAt(new Date());
                 galleryRepository.save(gallery);
             }
+            List<String> imagePhusList = objectMapper.readValue(productJson.get("imagePhus").traverse(), new TypeReference<List<String>>() {});
+            // Thêm lại ảnh phụ (gallery)
+            for (String image : imagePhusList) {
+                Gallery gallery = new Gallery();
+                gallery.setProduct(existingProduct); // Dùng existingProduct
+                gallery.setImage(image);
+                gallery.setIsThumbnail(false);
+                gallery.setPlaceholder("gallery");
+                gallery.setCreatedAt(new Date());
+                gallery.setUpdatedAt(new Date());
+                galleryRepository.save(gallery);
+            }
+
 
             productRepository.save(updatedProduct);
             return ResponseEntity.ok("Cập nhật thành công!");
@@ -183,5 +215,24 @@ public class ProductServiceImpl implements ProductService {
             return ResponseEntity.badRequest().build();
         }
     }
+    public ProductDTO getProductDetails(UUID productId) {
+        // Lấy thông tin sản phẩm
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
 
+        // Lấy các danh mục của sản phẩm
+        List<ProductCategory> productCategories = productCategoryRepository.findByProduct(product);
+
+        // Chuyển đổi các danh mục thành tên
+        List<String> categoryNames = productCategories.stream()
+                .map(pc -> pc.getCategory().getCategoryName())
+                .collect(Collectors.toList());
+
+        // Tạo DTO để trả về
+        ProductDTO productDTO = new ProductDTO();
+        productDTO.setProductName(product.getProductName());
+        productDTO.setCategoryNames(categoryNames);
+
+        return productDTO;
+    }
 }

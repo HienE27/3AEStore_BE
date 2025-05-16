@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.duongthuantri.exercise201.DTO.ProductDTO;
 import com.duongthuantri.exercise201.entity.Category;
 import com.duongthuantri.exercise201.entity.Product;
 import com.duongthuantri.exercise201.service.ProductService;
@@ -57,5 +58,9 @@ public class ProductController {
             e.printStackTrace();
             return ResponseEntity.badRequest().build();
         }
+    }
+    @GetMapping("/products/{productId}")
+    public ProductDTO getProductDetails(@PathVariable UUID productId) {
+        return productService.getProductDetails(productId);
     }
 }

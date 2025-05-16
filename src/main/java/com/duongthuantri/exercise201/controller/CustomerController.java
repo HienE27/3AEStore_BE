@@ -111,7 +111,7 @@ public class CustomerController {
                 .orElse(ResponseEntity.notFound().build());
     }
    @PostMapping("/login")
-public ResponseEntity<?> loginCustomer(@RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<?> loginCustomer(@RequestBody LoginRequest loginRequest) {
     try {
         Authentication authentication = customerAuthManager.authenticate(
             new UsernamePasswordAuthenticationToken(loginRequest.getUser_name(), loginRequest.getPassword_hash())

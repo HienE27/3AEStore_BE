@@ -51,6 +51,9 @@ public class CategoryServiceImpl implements CategoryService {
     public Category save(Category category, UUID staffId) {
         StaffAccount staff = staffAccountRepository.findById(staffId)
             .orElseThrow(() -> new RuntimeException("Staff not found with ID: " + staffId));
+            category.setCreated_at(new java.util.Date(System.currentTimeMillis()));
+            category.setUpdated_at(new java.util.Date(System.currentTimeMillis()));
+            category.setActive(true);
             category.setCreatedBy(staff);
             category.setUpdatedBy(staff);
         return categoryRepository.save(category);

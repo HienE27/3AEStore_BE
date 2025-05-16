@@ -24,8 +24,8 @@ public class Gallery {
     @JoinColumn(name = "product_id")
     @JsonIgnore
     private Product product;
-
-    @Column(nullable = false)
+    @Lob
+    @Column(nullable = false,columnDefinition = "LONGTEXT")
     private String image;
 
     @Column(nullable = false)

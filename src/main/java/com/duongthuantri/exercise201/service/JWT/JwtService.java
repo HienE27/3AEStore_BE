@@ -21,6 +21,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 
 @Component
@@ -50,8 +51,6 @@ public class JwtService {
                 claims.put("role", "ADMIN");
             }
         }
-
-
         return createToken(claims, username);
     }
         public String generateTokenForCustomer(String username) {
@@ -111,5 +110,9 @@ public class JwtService {
     public Boolean validateToken(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
         return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+    }
+    public UUID extractId(String token) {
+        // Example implementation: extract the "id" claim as a String and convert to UUID
+        return extractClaims(token, claims -> UUID.fromString(claims.get("id", String.class)));
     }
 }

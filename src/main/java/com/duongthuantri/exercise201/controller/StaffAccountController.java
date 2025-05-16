@@ -89,27 +89,36 @@ public class StaffAccountController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
     try {
+        // Đăng nhập với username và password
         Authentication auth = staffAuthManager.authenticate(
             new UsernamePasswordAuthenticationToken(request.getUser_name(), request.getPassword_hash())
         );
 
-        // Lấy đối tượng StaffAccount
+        // Lấy thông tin Staff từ cơ sở dữ liệu
         StaffAccount staff = staffAccountRepository.findByUser_name(request.getUser_name());
 
         if (staff == null) {
             return ResponseEntity.badRequest().body("Không tìm thấy thông tin nhân viên.");
         }
-        
+
+        // Nếu xác thực thành công, tạo token
         if (auth.isAuthenticated()) {
-                // Tạo token cho người dùng
-                final String jwtToken = jwtService.generateToken(request.getUser_name());
-                return ResponseEntity.ok(new JwtResponse(jwtToken));
-            }
+            // Tạo token cho staff
+            // String jwtToken = jwtService.generateTokenForCustomer(customer.getUser_name());
+            String jwtToken = jwtService.generateToken(request.getUser_name());
+            // Trả về token và thông tin khác nếu cần
+            Map<String, Object> response = new HashMap<>();
+            response.put("token", jwtToken);
+            // Trả về token trong response
+            return ResponseEntity.ok(response);
+        }
     } catch (AuthenticationException e) {
         return ResponseEntity.badRequest().body("Tên đăng nhập hoặc mật khẩu sai (nhân viên)");
     }
-    // Default return statement to ensure all code paths return a value
+
+    // Nếu có lỗi xảy ra, trả về lỗi 500
     return ResponseEntity.status(500).body("Đã xảy ra lỗi không xác định.");
 }
+
 
 }

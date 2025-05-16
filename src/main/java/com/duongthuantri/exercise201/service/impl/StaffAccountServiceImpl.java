@@ -40,6 +40,7 @@ public class StaffAccountServiceImpl implements StaffAccountService {
         //mã hóa mật khẩu trước khi lưu vào cơ sở dữ liệu
         String encodePassword = passwordEncoder.encode(staffAccount.getPassword_hash());
         staffAccount.setPassword_hash(encodePassword);
+        
         return staffAccountRepository.save(staffAccount);
     }
 

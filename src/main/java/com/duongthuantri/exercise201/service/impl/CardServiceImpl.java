@@ -54,55 +54,55 @@ public ResponseEntity<?> save(JsonNode jsonData) {
     try {
         UUID customerId = UUID.fromString(jsonData.get("idCustomer").asText());
 
-        // Kiểm tra xem Customer có tồn tại không
+        // 1. Kiểm tra customer tồn tại
         Optional<Customer> customerOptional = customerRepository.findById(customerId);
         if (!customerOptional.isPresent()) {
             return ResponseEntity.badRequest().body("Customer not found");
         }
         Customer customer = customerOptional.get();
 
-        // Xử lý danh sách sản phẩm
-        List<CardItem> cartItemList = new ArrayList<>();
+        // 2. Lấy hoặc tạo mới giỏ hàng
+        Card card = cardRepository.findByCustomerId(customerId)
+                .orElseGet(() -> {
+                    Card newCard = new Card();
+                    newCard.setCustomer(customer);
+                    return cardRepository.save(newCard);
+                });
+
+        // 3. Duyệt qua từng sản phẩm
         for (JsonNode productNode : jsonData.get("products")) {
             UUID productId = UUID.fromString(productNode.get("productId").asText());
-            Integer quantity = productNode.get("quantity").asInt();
+            int quantity = productNode.get("quantity").asInt();
 
-            // Kiểm tra sự tồn tại của sản phẩm
+            // Kiểm tra sản phẩm có tồn tại không
             Optional<Product> productOptional = productRepository.findById(productId);
             if (!productOptional.isPresent()) {
                 return ResponseEntity.badRequest().body("Product not found for ID: " + productId);
             }
             Product product = productOptional.get();
 
-            // Tạo CardItem và thêm vào giỏ hàng
-            CardItem cardItem = new CardItem();
-            cardItem.setProduct(product);
-            cardItem.setQuantity(quantity);
-
-            // Kiểm tra xem giỏ hàng của khách hàng đã có chưa, nếu chưa thì tạo mới
-            Optional<Card> cardOptional = cardRepository.findByCustomerId(customerId);
-            Card card;
-            if (cardOptional.isPresent()) {
-                card = cardOptional.get();
+            // 4. Kiểm tra sản phẩm đã có trong giỏ chưa
+            Optional<CardItem> existingItemOpt = cardItemRepository.findByCardAndProduct(card, product);
+            if (existingItemOpt.isPresent()) {
+                CardItem existingItem = existingItemOpt.get();
+                existingItem.setQuantity(existingItem.getQuantity() + quantity);
+                cardItemRepository.save(existingItem);
             } else {
-                card = new Card();
-                card.setCustomer(customer);
-                card = cardRepository.save(card);
+                CardItem newItem = new CardItem();
+                newItem.setCard(card);
+                newItem.setProduct(product);
+                newItem.setQuantity(quantity);
+                cardItemRepository.save(newItem);
             }
-
-            cardItem.setCard(card);
-            cartItemList.add(cardItem);
         }
 
-        // Lưu tất cả các item vào giỏ hàng
-        cardItemRepository.saveAll(cartItemList);
         return ResponseEntity.ok("Products added to cart successfully");
-
     } catch (Exception e) {
         e.printStackTrace();
         return ResponseEntity.badRequest().body("Error processing the request: " + e.getMessage());
     }
 }
+
     //update
     @Override
 public ResponseEntity<?> updateQuantity(UUID customerId, UUID productId, int newQuantity) {

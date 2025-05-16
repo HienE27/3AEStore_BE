@@ -15,4 +15,6 @@ public interface CategoryRepository extends JpaRepository<Category, UUID> {
     List<Category> findByParent(Category parent);
 
     boolean existsByCategoryName(String categoryName);
+
+    //lấy tất cã category của product
 }

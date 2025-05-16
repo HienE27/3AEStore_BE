@@ -38,6 +38,9 @@ public class Customer {
     @Column
     private Boolean active = true;
 
+    @Column(name = "gender")
+    private char gender; // Giới tính
+    
     @Column(nullable = false)
     @Temporal(TemporalType.TIMESTAMP)
     private Date registered_at;

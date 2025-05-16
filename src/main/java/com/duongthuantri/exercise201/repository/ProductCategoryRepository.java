@@ -5,6 +5,8 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.rest.core.annotation.RepositoryRestResource;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +15,7 @@ import com.duongthuantri.exercise201.entity.Product;
 import com.duongthuantri.exercise201.entity.ProductCategory;
 
 @Repository
+@RepositoryRestResource(path = "productCategories")
 public interface ProductCategoryRepository extends JpaRepository<ProductCategory, UUID> {
     List<ProductCategory> findByProduct(Product product);
 

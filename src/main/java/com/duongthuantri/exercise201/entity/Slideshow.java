@@ -28,7 +28,8 @@ public class Slideshow {
     @Column(name = "destination_url")
     private String destinationUrl;
 
-    @Column(nullable = false)
+    @Column(nullable = false,columnDefinition = "LONGTEXT")
+    @Lob
     private String image;
 
     @Column(nullable = false)

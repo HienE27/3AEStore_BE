@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
 
+import com.duongthuantri.exercise201.DTO.ProductDTO;
 import com.duongthuantri.exercise201.entity.Product;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -22,4 +23,7 @@ public interface ProductService {
 
     // void deleteProduct(UUID id);
     public ResponseEntity<?> deleteProduct(UUID productId);
+
+    //
+    public ProductDTO getProductDetails(UUID productId);
 }
