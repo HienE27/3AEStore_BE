@@ -188,7 +188,8 @@ public class ReviewController {
                             r.getProduct().getSalePrice(),
                             r.getProduct().getComparePrice(),
                             r.getProduct().getBuyingPrice(),
-                            r.getProduct().getQuantity()
+                            r.getProduct().getQuantity(),
+                            r.getProduct().getShortDescription()
                     );
                 }
 
