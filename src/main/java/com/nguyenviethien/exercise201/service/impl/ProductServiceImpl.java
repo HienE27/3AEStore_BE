@@ -15,8 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.nguyenviethien.exercise201.DTO.ProductDTO;
+import com.nguyenviethien.exercise201.DTO.ProductDetailsDTO;
 import com.nguyenviethien.exercise201.entity.Category;
 import com.nguyenviethien.exercise201.entity.Gallery;
 import com.nguyenviethien.exercise201.entity.OrderItem;
@@ -30,8 +29,8 @@ import com.nguyenviethien.exercise201.repository.ProductCategoryRepository;
 import com.nguyenviethien.exercise201.repository.ProductRepository;
 import com.nguyenviethien.exercise201.repository.StaffAccountRepository;
 import com.nguyenviethien.exercise201.service.ProductService;
+import com.nguyenviethien.exercise201.service.AIGenerateDescriptionService;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class ProductServiceImpl implements ProductService {
@@ -53,16 +52,62 @@ public class ProductServiceImpl implements ProductService {
 
     @Autowired
     private ProductCategoryRepository productCategoryRepository;
-    
-    private final ObjectMapper objectMapper;
 
-    public ProductServiceImpl(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
+    @Autowired
+    private AIGenerateDescriptionService aiGenerateDescriptionService;
 
     @Override
     public List<Product> getAllProducts() {
-        return productRepository.findAllWithRelationships();
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_5\",\"timestamp\":" + System.currentTimeMillis()
+                    + ",\"location\":\"ProductServiceImpl.java:60\",\"message\":\"getAllProducts entry\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
+            fw.close();
+        } catch (java.io.IOException ex) {
+        }
+        // #endregion
+        try {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_6\",\"timestamp\":"
+                        + System.currentTimeMillis()
+                        + ",\"location\":\"ProductServiceImpl.java:62\",\"message\":\"Before calling productRepository.findAllWithRelationships\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {
+            }
+            // #endregion
+            List<Product> result = productRepository.findAllWithRelationships();
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_7\",\"timestamp\":"
+                        + System.currentTimeMillis()
+                        + ",\"location\":\"ProductServiceImpl.java:63\",\"message\":\"After calling productRepository.findAllWithRelationships\",\"data\":{\"productCount\":\""
+                        + (result != null ? result.size() : 0)
+                        + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {
+            }
+            // #endregion
+            return result;
+        } catch (Exception e) {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_8\",\"timestamp\":"
+                        + System.currentTimeMillis()
+                        + ",\"location\":\"ProductServiceImpl.java:64\",\"message\":\"Exception in getAllProducts\",\"data\":{\"error\":\""
+                        + e.getClass().getName() + "\",\"message\":\"" + e.getMessage() + "\",\"stackTrace\":\""
+                        + java.util.Arrays.toString(e.getStackTrace()).replace("\"", "'")
+                        + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {
+            }
+            // #endregion
+            throw e;
+        }
     }
 
     @Override
@@ -92,25 +137,36 @@ public class ProductServiceImpl implements ProductService {
 
             // ✅ SỬA ĐỔI: Tạo Product object manually thay vì dùng objectMapper.treeToValue
             Product product = new Product();
-            
+
             // Basic fields
             product.setSlug(productJson.get("slug").asText());
             product.setProductName(productJson.get("productName").asText());
             product.setSku(productJson.get("sku").asText());
-            
+
             // ✅ QUAN TRỌNG: Handle BigDecimal properly
             product.setSalePrice(new BigDecimal(productJson.get("salePrice").asDouble()));
             product.setComparePrice(new BigDecimal(productJson.get("comparePrice").asDouble()));
             product.setBuyingPrice(new BigDecimal(productJson.get("buyingPrice").asDouble()));
-            
+
             product.setQuantity(productJson.get("quantity").asInt());
-            product.setShortDescription(productJson.has("shortDescription") ? productJson.get("shortDescription").asText() : "");
-            product.setProductDescription(productJson.has("productDescription") ? productJson.get("productDescription").asText() : "");
-            
+            product.setShortDescription(
+                    productJson.has("shortDescription") ? productJson.get("shortDescription").asText() : "");
+
+            // ✅ Tự động generate productDescription nếu không có hoặc rỗng
+            String productDescription = productJson.has("productDescription")
+                    ? productJson.get("productDescription").asText()
+                    : "";
+            if (productDescription == null || productDescription.trim().isEmpty()) {
+                System.out.println("🤖 Auto-generating description for product: " + product.getProductName());
+                productDescription = aiGenerateDescriptionService.generateDescription(product.getProductName());
+                System.out.println("✅ Description generated successfully");
+            }
+            product.setProductDescription(productDescription);
+
             // ✅ QUAN TRỌNG: Handle enum properly - entity sử dụng lowercase
             String productTypeStr = productJson.get("productType").asText().toLowerCase();
             product.setProductType(Product.ProductType.valueOf(productTypeStr));
-            
+
             product.setPublished(productJson.get("published").asBoolean());
             product.setDisableOutOfStock(productJson.get("disableOutOfStock").asBoolean());
             product.setNote(productJson.has("note") ? productJson.get("note").asText() : "");
@@ -131,7 +187,7 @@ public class ProductServiceImpl implements ProductService {
                     try {
                         String categoryIdStr = categoryIdNode.asText();
                         UUID categoryId = UUID.fromString(categoryIdStr);
-                        
+
                         Optional<Category> categoryOpt = categoryRepository.findById(categoryId);
                         if (categoryOpt.isPresent()) {
                             ProductCategory productCategory = new ProductCategory();
@@ -156,7 +212,7 @@ public class ProductServiceImpl implements ProductService {
 
             // ✅ SỬA ĐỔI: Handle images properly
             List<Gallery> galleryList = new ArrayList<>();
-            
+
             // Process thumbnail images
             if (productJson.has("images") && productJson.get("images").isArray()) {
                 System.out.println("🖼️ Processing thumbnail images...");
@@ -201,24 +257,23 @@ public class ProductServiceImpl implements ProductService {
 
             // Final save
             productRepository.save(savedProduct);
-            
+
             System.out.println("🎉 Product creation completed successfully!");
             return ResponseEntity.ok().body(Map.of(
-                "message", "Thành công!", 
-                "productId", savedProduct.getId().toString(),
-                "productName", savedProduct.getProductName()
-            ));
+                    "message", "Thành công!",
+                    "productId", savedProduct.getId().toString(),
+                    "productName", savedProduct.getProductName()));
 
         } catch (IllegalArgumentException e) {
             System.err.println("❌ Validation error: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.badRequest().body(Map.of("error", "Dữ liệu không hợp lệ: " + e.getMessage()));
-            
+
         } catch (Exception e) {
             System.err.println("💥 Unexpected error: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Có lỗi xảy ra khi tạo sản phẩm: " + e.getMessage()));
+                    .body(Map.of("error", "Có lỗi xảy ra khi tạo sản phẩm: " + e.getMessage()));
         }
     }
 
@@ -240,12 +295,23 @@ public class ProductServiceImpl implements ProductService {
             existingProduct.setComparePrice(new BigDecimal(productJson.get("comparePrice").asDouble()));
             existingProduct.setBuyingPrice(new BigDecimal(productJson.get("buyingPrice").asDouble()));
             existingProduct.setQuantity(productJson.get("quantity").asInt());
-            existingProduct.setShortDescription(productJson.has("shortDescription") ? productJson.get("shortDescription").asText() : "");
-            existingProduct.setProductDescription(productJson.has("productDescription") ? productJson.get("productDescription").asText() : "");
-            
+            existingProduct.setShortDescription(
+                    productJson.has("shortDescription") ? productJson.get("shortDescription").asText() : "");
+
+            // ✅ Tự động generate productDescription nếu không có hoặc rỗng
+            String productDescription = productJson.has("productDescription")
+                    ? productJson.get("productDescription").asText()
+                    : "";
+            if (productDescription == null || productDescription.trim().isEmpty()) {
+                System.out.println("🤖 Auto-generating description for product: " + existingProduct.getProductName());
+                productDescription = aiGenerateDescriptionService.generateDescription(existingProduct.getProductName());
+                System.out.println("✅ Description generated successfully");
+            }
+            existingProduct.setProductDescription(productDescription);
+
             String productTypeStr = productJson.get("productType").asText().toLowerCase();
             existingProduct.setProductType(Product.ProductType.valueOf(productTypeStr));
-            
+
             existingProduct.setPublished(productJson.get("published").asBoolean());
             existingProduct.setDisableOutOfStock(productJson.get("disableOutOfStock").asBoolean());
             existingProduct.setNote(productJson.has("note") ? productJson.get("note").asText() : "");
@@ -307,7 +373,7 @@ public class ProductServiceImpl implements ProductService {
 
             productRepository.save(existingProduct);
             return ResponseEntity.ok(Map.of("message", "Cập nhật thành công!"));
-            
+
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.badRequest().body(Map.of("error", "Cập nhật thất bại: " + e.getMessage()));
@@ -325,7 +391,7 @@ public class ProductServiceImpl implements ProductService {
             List<OrderItem> orderItems = orderItemRepository.findByProduct(product);
             if (!orderItems.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("error", "Không thể xóa sản phẩm vì còn tồn tại trong đơn hàng."));
+                        .body(Map.of("error", "Không thể xóa sản phẩm vì còn tồn tại trong đơn hàng."));
             }
 
             // Delete related data
@@ -336,14 +402,14 @@ public class ProductServiceImpl implements ProductService {
             productRepository.delete(product);
 
             return ResponseEntity.ok(Map.of("message", "Sản phẩm đã được xóa thành công!"));
-            
+
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.badRequest().body(Map.of("error", "Lỗi khi xóa sản phẩm: " + e.getMessage()));
         }
     }
-    
-    public ProductDTO getProductDetails(UUID productId) {
+
+    public ProductDetailsDTO getProductDetails(UUID productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
 
@@ -353,17 +419,12 @@ public class ProductServiceImpl implements ProductService {
                 .map(pc -> pc.getCategory().getCategoryName())
                 .collect(Collectors.toList());
 
-        ProductDTO productDTO = new ProductDTO();
-        // Map full product fields into ProductDTO
+        ProductDetailsDTO productDTO = new ProductDetailsDTO();
         productDTO.setId(product.getId());
-        productDTO.setSlug(product.getSlug());
         productDTO.setProductName(product.getProductName());
-        productDTO.setSku(product.getSku() != null ? product.getSku() : "");
-        productDTO.setSalePrice(product.getSalePrice() != null ? product.getSalePrice() : BigDecimal.ZERO);
-        productDTO.setComparePrice(product.getComparePrice() != null ? product.getComparePrice() : BigDecimal.ZERO);
-        productDTO.setBuyingPrice(product.getBuyingPrice() != null ? product.getBuyingPrice() : BigDecimal.ZERO);
+        productDTO.setDescription(product.getProductDescription() != null ? product.getProductDescription() : "");
+        productDTO.setPrice(product.getSalePrice() != null ? product.getSalePrice() : BigDecimal.ZERO);
         productDTO.setQuantity(product.getQuantity() != null ? product.getQuantity() : 0);
-        productDTO.setShortDescription(product.getShortDescription() != null ? product.getShortDescription() : "");
         productDTO.setCategoryNames(categoryNames);
 
         return productDTO;

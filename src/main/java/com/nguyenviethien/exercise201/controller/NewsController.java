@@ -18,10 +18,51 @@ public class NewsController {
     // LẤY TẤT CẢ TIN TỨC
     @GetMapping("/api/news")
     public ResponseEntity<List<News>> getAllNews() {
-        System.out.println("=== LẤY TẤT CẢ TIN TỨC ===");
-        List<News> newsList = newsService.getAllNews();
-        System.out.println("Tìm thấy " + newsList.size() + " tin tức");
-        return ResponseEntity.ok(newsList);
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_15\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"NewsController.java:20\",\"message\":\"getAllNews entry\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}\n");
+            fw.close();
+        } catch (java.io.IOException ex) {}
+        // #endregion
+        try {
+            System.out.println("=== LẤY TẤT CẢ TIN TỨC ===");
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_16\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"NewsController.java:23\",\"message\":\"Before calling newsService.getAllNews\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            List<News> newsList = newsService.getAllNews();
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_17\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"NewsController.java:25\",\"message\":\"After calling newsService.getAllNews\",\"data\":{\"newsCount\":\"" + (newsList != null ? newsList.size() : 0) + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            System.out.println("Tìm thấy " + newsList.size() + " tin tức");
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_18\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"NewsController.java:27\",\"message\":\"Before returning response\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            return ResponseEntity.ok(newsList);
+        } catch (Exception e) {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_19\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"NewsController.java:29\",\"message\":\"Exception in getAllNews\",\"data\":{\"error\":\"" + e.getClass().getName() + "\",\"message\":\"" + e.getMessage().replace("\"", "'") + "\",\"stackTrace\":\"" + java.util.Arrays.toString(e.getStackTrace()).replace("\"", "'").substring(0, Math.min(500, java.util.Arrays.toString(e.getStackTrace()).replace("\"", "'").length())) + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            System.err.println("💥 Error getting all news: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     // LẤY TIN TỨC THEO ID - ĐÃ SỬA

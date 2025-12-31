@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.math.BigDecimal;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.hibernate.annotations.BatchSize;
 
 @Getter
@@ -19,6 +20,7 @@ import org.hibernate.annotations.BatchSize;
 @AllArgsConstructor
 @Entity
 @Table(name = "products")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Product {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -86,9 +88,11 @@ public class Product {
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @BatchSize(size = 20)
+    @JsonIgnore
     private List<ProductCategory> productCategories;
 
     @OneToOne(mappedBy = "product", cascade = CascadeType.ALL, optional = true, fetch = FetchType.LAZY)
+    @JsonIgnore
     private ProductShippingInfo shippingInfo;
 
     // ✅ THÊM METHOD NÀY - Trả về list ID của categories

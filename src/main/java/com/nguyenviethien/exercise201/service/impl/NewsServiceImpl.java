@@ -74,8 +74,40 @@ public class NewsServiceImpl implements NewsService {
 
     @Override
     public List<News> getAllNews() {
-        List<News> newsList = newsRepository.findAll();
-        System.out.println("📊 Retrieved " + newsList.size() + " news items");
-        return newsList;
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_20\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"NewsServiceImpl.java:76\",\"message\":\"getAllNews entry\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
+            fw.close();
+        } catch (java.io.IOException ex) {}
+        // #endregion
+        try {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_21\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"NewsServiceImpl.java:78\",\"message\":\"Before calling newsRepository.findAll\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            List<News> newsList = newsRepository.findAll();
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_22\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"NewsServiceImpl.java:80\",\"message\":\"After calling newsRepository.findAll\",\"data\":{\"newsCount\":\"" + (newsList != null ? newsList.size() : 0) + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            System.out.println("📊 Retrieved " + newsList.size() + " news items");
+            return newsList;
+        } catch (Exception e) {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_23\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"NewsServiceImpl.java:82\",\"message\":\"Exception in getAllNews\",\"data\":{\"error\":\"" + e.getClass().getName() + "\",\"message\":\"" + e.getMessage().replace("\"", "'") + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            throw e;
+        }
     }
 }
