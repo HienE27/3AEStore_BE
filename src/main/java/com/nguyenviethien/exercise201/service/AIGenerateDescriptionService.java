@@ -49,7 +49,7 @@ public class AIGenerateDescriptionService {
                     + geminiApiKey.substring(0, Math.min(15, geminiApiKey.length())) + "...");
             System.out.println("🔗 API Base: " + geminiApiBase);
             System.out.println("🤖 Model: " + geminiModel);
-            
+
             // Tự động detect và chọn model tốt nhất
             try {
                 String detectedModel = detectBestModel();
@@ -63,7 +63,7 @@ public class AIGenerateDescriptionService {
                 System.out.println("⚠️ Could not auto-detect model, using configured: " + geminiModel);
                 cachedModelName = geminiModel;
             }
-            
+
             System.out.println("✅ AI description generation ENABLED (using Gemini)");
         } else {
             System.err.println("⚠️ WARNING: Gemini API key NOT configured!");
@@ -76,17 +76,18 @@ public class AIGenerateDescriptionService {
 
     /**
      * Tự động detect và chọn model tốt nhất từ danh sách models available
-     * Ưu tiên: gemini-2.0-flash > gemini-1.5-flash > gemini-pro > bất kỳ flash model nào
+     * Ưu tiên: gemini-2.0-flash > gemini-1.5-flash > gemini-pro > bất kỳ flash
+     * model nào
      */
     private String detectBestModel() {
         try {
             String listModelsUrl = geminiApiBase + "/models?key=" + geminiApiKey;
             System.out.println("🔍 Auto-detecting best Gemini model...");
-            
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<?> request = new HttpEntity<>(headers);
-            
+
             @SuppressWarnings("unchecked")
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     listModelsUrl,
@@ -96,26 +97,33 @@ public class AIGenerateDescriptionService {
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> responseBody = response.getBody();
-                
+
                 if (responseBody.containsKey("models")) {
                     Object modelsObj = responseBody.get("models");
                     if (modelsObj instanceof java.util.List) {
                         @SuppressWarnings("unchecked")
                         java.util.List<Map<String, Object>> models = (java.util.List<Map<String, Object>>) modelsObj;
-                        
-                        // Ưu tiên các model theo thứ tự
+
+                        // Ưu tiên các model theo thứ tự (tránh experimental models: -exp, -beta)
+                        // Experimental models thường không có free tier quota
                         String[] preferredModels = {
-                            "gemini-2.0-flash",
-                            "gemini-1.5-flash",
-                            "gemini-pro",
-                            "gemini-1.5-flash-latest"
+                                "gemini-2.0-flash",      // Stable version
+                                "gemini-1.5-flash",      // Stable version
+                                "gemini-pro",            // Stable version
+                                "gemini-1.5-flash-latest" // Latest stable
                         };
-                        
-                        // Tìm model tốt nhất
+
+                        // Tìm model tốt nhất (ưu tiên stable, tránh experimental)
                         for (String preferred : preferredModels) {
                             for (Map<String, Object> model : models) {
                                 String modelName = (String) model.get("name");
                                 if (modelName != null && modelName.contains(preferred)) {
+                                    // Bỏ qua experimental models (không có free tier quota)
+                                    if (modelName.contains("-exp") || modelName.contains("-beta") || 
+                                        modelName.contains("experimental")) {
+                                        continue;
+                                    }
+                                    
                                     // Kiểm tra xem model có support generateContent không
                                     Object supportedMethods = model.get("supportedGenerationMethods");
                                     if (supportedMethods instanceof java.util.List) {
@@ -134,11 +142,17 @@ public class AIGenerateDescriptionService {
                                 }
                             }
                         }
-                        
-                        // Nếu không tìm thấy preferred, tìm bất kỳ flash model nào
+
+                        // Nếu không tìm thấy preferred, tìm bất kỳ flash model nào (tránh experimental)
                         for (Map<String, Object> model : models) {
                             String modelName = (String) model.get("name");
                             if (modelName != null && modelName.contains("flash")) {
+                                // Bỏ qua experimental models (không có free tier quota)
+                                if (modelName.contains("-exp") || modelName.contains("-beta") || 
+                                    modelName.contains("experimental")) {
+                                    continue;
+                                }
+                                
                                 Object supportedMethods = model.get("supportedGenerationMethods");
                                 if (supportedMethods instanceof java.util.List) {
                                     @SuppressWarnings("unchecked")
@@ -160,7 +174,7 @@ public class AIGenerateDescriptionService {
         } catch (Exception e) {
             System.out.println("⚠️ Could not list models: " + e.getMessage());
         }
-        
+
         // Fallback về model đã config
         return geminiModel;
     }
@@ -312,6 +326,16 @@ public class AIGenerateDescriptionService {
             System.err.println("❌ HTTP Error calling Gemini API");
             System.err.println("   Status: " + e.getStatusCode());
             System.err.println("   Message: " + e.getMessage());
+            
+            // Nếu gặp 429 (quota exceeded) với experimental model, log warning
+            if (e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
+                String currentModel = cachedModelName != null ? cachedModelName : geminiModel;
+                if (currentModel.contains("-exp") || currentModel.contains("-beta")) {
+                    System.err.println("⚠️ WARNING: Experimental model '" + currentModel + "' has no free tier quota!");
+                    System.err.println("💡 Tip: Auto-detection will skip experimental models on next restart");
+                }
+            }
+            
             if (e.getResponseBodyAsString() != null) {
                 System.err.println("   Response: " + e.getResponseBodyAsString());
             }
