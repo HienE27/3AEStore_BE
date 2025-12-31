@@ -9,11 +9,19 @@ import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.nguyenviethien.exercise201.service.util.StaffAccountSecurityService;
+import com.nguyenviethien.exercise201.repository.StaffAccountRepository;
+import com.nguyenviethien.exercise201.entity.StaffAccount;
+import com.nguyenviethien.exercise201.entity.Role;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 import java.io.IOException;
 
@@ -23,6 +31,8 @@ public class JwtFilter extends OncePerRequestFilter {
     private JwtService jwtService;
     @Autowired
     private StaffAccountSecurityService staffAccountSecurityService;
+    @Autowired
+    private StaffAccountRepository staffAccountRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, @NonNull HttpServletResponse response,
@@ -46,16 +56,56 @@ public class JwtFilter extends OncePerRequestFilter {
             // Chỉ xử lý JWT nếu có token và chưa được xác thực
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 try {
-                    UserDetails userDetails = staffAccountSecurityService.loadUserByUsername(username);
-                    if (jwtService.validateToken(token, userDetails)) {
+                    UserDetails userDetails = null;
+                    try {
+                        userDetails = staffAccountSecurityService.loadUserByUsername(username);
+                        if (userDetails != null) {
+                            System.out.println("🔐 JWT: Loaded UserDetails for username: " + userDetails.getUsername()
+                                + " authorities: " + userDetails.getAuthorities());
+                        }
+                    } catch (Exception ex) {
+                        // fallback: try to load by id claim from token
+                        try {
+                            UUID idFromToken = jwtService.extractId(token);
+                            if (idFromToken != null) {
+                                StaffAccount sa = staffAccountRepository.findById(idFromToken).orElse(null);
+                                if (sa != null) {
+                                    List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+                                    Role role = sa.getRole();
+                                    if (role != null) {
+                                        String roleName = role.getRole_name();
+                                        if (roleName != null && !roleName.startsWith("ROLE_")) {
+                                            roleName = "ROLE_" + roleName;
+                                        }
+                                        authorities.add(new SimpleGrantedAuthority(roleName));
+                                    }
+                                    userDetails = new org.springframework.security.core.userdetails.User(
+                                            sa.getUser_name(), sa.getPassword_hash(), authorities);
+                                    System.out.println("🔐 JWT: Loaded StaffAccount by id fallback for: " + sa.getUser_name()
+                                        + " authorities: " + authorities);
+                                }
+                            }
+                        } catch (Exception idEx) {
+                            System.out.println("🔐 JWT: Fallback by id failed: " + idEx.getMessage());
+                        }
+                    }
+
+                    if (userDetails != null) {
+                        System.out.println("🔐 JWT: About to validate token for subject: " + username
+                            + " vs userDetails.username: " + userDetails.getUsername()
+                            + " authorities: " + userDetails.getAuthorities());
+                    }
+                    if (userDetails != null && jwtService.validateToken(token, userDetails)) {
                         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                                 userDetails, null, userDetails.getAuthorities());
                         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                         SecurityContextHolder.getContext().setAuthentication(authToken);
-                        System.out.println("🔐 JWT: Xác thực thành công cho: " + username);
+                        System.out.println("🔐 JWT: Xác thực thành công cho: " + username
+                            + " grantedAuthorities: " + SecurityContextHolder.getContext().getAuthentication().getAuthorities());
                     } else {
                         System.out.println("🔐 JWT: Xác thực token thất bại cho: " + username);
                     }
+
                 } catch (Exception authException) {
                     System.out.println("🔐 JWT: Lỗi xác thực: " + authException.getMessage());
                     // Không throw exception, chỉ log và tiếp tục
