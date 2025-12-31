@@ -15,6 +15,7 @@ import com.nguyenviethien.exercise201.DTO.ProductDTO;
 import com.nguyenviethien.exercise201.entity.Category;
 import com.nguyenviethien.exercise201.entity.Product;
 import com.nguyenviethien.exercise201.service.ProductService;
+import com.nguyenviethien.exercise201.service.AIGenerateDescriptionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -28,6 +29,9 @@ public class ProductController {
     
     @Autowired
     private ObjectMapper objectMapper;
+    
+    @Autowired
+    private AIGenerateDescriptionService aiGenerateDescriptionService;
 
     @GetMapping
     public ResponseEntity<List<Product>> getAllProducts() {
@@ -289,5 +293,45 @@ public class ProductController {
         System.out.println("🐛 Debug endpoint called with data: " + data);
         
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Generate product description using AI based on product name
+     * POST /api/products/generate-description
+     * Body: { "productName": "Tên sách" }
+     */
+    @PostMapping("/generate-description")
+    public ResponseEntity<Map<String, Object>> generateDescription(@RequestBody Map<String, String> request) {
+        try {
+            String productName = request != null ? request.get("productName") : null;
+            
+            if (productName == null || productName.trim().isEmpty()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("error", "Tên sản phẩm không được để trống");
+                return ResponseEntity.badRequest().body(error);
+            }
+            
+            System.out.println("🤖 Generating description for product: " + productName);
+            
+            String description = aiGenerateDescriptionService.generateDescription(productName);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("description", description);
+            response.put("productName", productName);
+            response.put("success", true);
+            
+            System.out.println("✅ Description generated successfully");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            System.err.println("💥 Error generating description: " + e.getMessage());
+            e.printStackTrace();
+            
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Có lỗi xảy ra khi tạo mô tả: " + e.getMessage());
+            error.put("success", false);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
     }
 }
