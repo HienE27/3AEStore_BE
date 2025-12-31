@@ -12,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.nguyenviethien.exercise201.DTO.ProductDTO;
-import com.nguyenviethien.exercise201.entity.Category;
 import com.nguyenviethien.exercise201.entity.Product;
 import com.nguyenviethien.exercise201.service.ProductService;
 import com.nguyenviethien.exercise201.service.AIGenerateDescriptionService;
