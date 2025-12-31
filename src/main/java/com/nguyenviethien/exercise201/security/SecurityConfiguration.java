@@ -22,6 +22,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import com.nguyenviethien.exercise201.service.JWT.JwtFilter;
 import com.nguyenviethien.exercise201.service.util.CustomerSecurityService;
 import com.nguyenviethien.exercise201.service.util.StaffAccountSecurityService;
+import com.nguyenviethien.exercise201.security.OAuth2LoginSuccessHandler;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 
 import java.util.Arrays;
 
@@ -74,9 +76,17 @@ public class SecurityConfiguration {
                 // Default - yêu cầu authentication
                 .anyRequest().permitAll()  // Keep permitAll for debugging
             )
+            // Allow OAuth2 endpoints
+            .requestMatchers("/oauth2/**").permitAll()
+            .requestMatchers("/login/oauth2/**").permitAll()
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .csrf(AbstractHttpConfigurer::disable)
             .userDetailsService(staffDetailsService);
+
+        // Configure OAuth2 login success handler
+        http.oauth2Login(oauth2 -> oauth2
+                .successHandler(oauth2LoginSuccessHandler())
+        );
 
         // CORS configuration - ENHANCED
         http.cors(cors -> cors.configurationSource(request -> {
@@ -93,6 +103,11 @@ public class SecurityConfiguration {
          http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         
         return http.build();
+    }
+
+    @Bean
+    public AuthenticationSuccessHandler oauth2LoginSuccessHandler() {
+        return new OAuth2LoginSuccessHandler();
     }
 
     @Bean
