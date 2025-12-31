@@ -105,36 +105,45 @@ public class AIGenerateDescriptionService {
                         java.util.List<Map<String, Object>> models = (java.util.List<Map<String, Object>>) modelsObj;
 
                         // Ưu tiên các model theo thứ tự (chỉ chọn models có free tier quota)
-                        // gemini-2.0-flash KHÔNG có free tier (limit: 0) - bỏ qua
-                        // Chỉ gemini-1.5-flash và gemini-pro có free tier (60 req/min)
+                        // CHỈ chọn exact match: gemini-1.5-flash hoặc gemini-pro (KHÔNG có suffix)
+                        // Bỏ qua: -latest, -exp, -beta, gemini-2.0, gemini-2.5 (không có free tier)
                         String[] preferredModels = {
-                                "gemini-1.5-flash",      // ✅ Có free tier (60 req/min)
-                                "gemini-pro",            // ✅ Có free tier (60 req/min)
-                                "gemini-1.5-flash-latest" // Latest stable (nếu có)
+                                "gemini-1.5-flash", // ✅ Có free tier (60 req/min)
+                                "gemini-pro" // ✅ Có free tier (60 req/min)
                         };
 
-                        // Tìm model tốt nhất (ưu tiên stable, tránh experimental)
+                        // Tìm model tốt nhất (chỉ exact match, không có suffix)
                         for (String preferred : preferredModels) {
                             for (Map<String, Object> model : models) {
                                 String modelName = (String) model.get("name");
-                                if (modelName != null && modelName.contains(preferred)) {
-                                    // Bỏ qua experimental models và gemini-2.0 (không có free tier quota)
-                                    if (modelName.contains("-exp") || modelName.contains("-beta") || 
-                                        modelName.contains("experimental") || 
-                                        modelName.contains("gemini-2.0")) {
-                                        continue;
-                                    }
+                                if (modelName != null) {
+                                    // Extract model name từ full path (vd: models/gemini-1.5-flash)
+                                    String[] parts = modelName.split("/");
+                                    if (parts.length > 0) {
+                                        String extractedModel = parts[parts.length - 1];
 
-                                    // Kiểm tra xem model có support generateContent không
-                                    Object supportedMethods = model.get("supportedGenerationMethods");
-                                    if (supportedMethods instanceof java.util.List) {
-                                        @SuppressWarnings("unchecked")
-                                        java.util.List<String> methods = (java.util.List<String>) supportedMethods;
-                                        if (methods.contains("generateContent")) {
-                                            // Extract model name từ full path (vd: models/gemini-1.5-flash)
-                                            String[] parts = modelName.split("/");
-                                            if (parts.length > 0) {
-                                                String extractedModel = parts[parts.length - 1];
+                                        // CHỈ chọn exact match (không có suffix)
+                                        if (!extractedModel.equals(preferred)) {
+                                            continue; // Bỏ qua nếu không exact match
+                                        }
+
+                                        // Bỏ qua experimental, -latest, và các version mới (không có free tier quota)
+                                        if (extractedModel.contains("-exp") ||
+                                                extractedModel.contains("-beta") ||
+                                                extractedModel.contains("experimental") ||
+                                                extractedModel.contains("-latest") || // gemini-pro-latest ->
+                                                                                      // gemini-2.5-pro
+                                                extractedModel.contains("gemini-2.0") ||
+                                                extractedModel.contains("gemini-2.5")) {
+                                            continue;
+                                        }
+
+                                        // Kiểm tra xem model có support generateContent không
+                                        Object supportedMethods = model.get("supportedGenerationMethods");
+                                        if (supportedMethods instanceof java.util.List) {
+                                            @SuppressWarnings("unchecked")
+                                            java.util.List<String> methods = (java.util.List<String>) supportedMethods;
+                                            if (methods.contains("generateContent")) {
                                                 System.out.println("✅ Found suitable model: " + extractedModel);
                                                 return extractedModel;
                                             }
