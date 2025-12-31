@@ -5,13 +5,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
+ 
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
 import com.nguyenviethien.exercise201.entity.Customer;
 import com.nguyenviethien.exercise201.repository.CustomerRepository;
+import java.util.Optional;
 import com.nguyenviethien.exercise201.service.JWT.JwtService;
 
 import java.io.IOException;
@@ -48,7 +49,10 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
             Customer customer = null;
             if (email != null) {
-                customer = customerRepository.findByEmail(email);
+                Optional<Customer> opt = customerRepository.findByEmail(email);
+                if (opt.isPresent()) {
+                    customer = opt.get();
+                }
             }
 
             if (customer == null) {
