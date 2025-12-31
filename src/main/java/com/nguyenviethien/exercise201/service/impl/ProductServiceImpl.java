@@ -62,7 +62,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<Product> getAllProducts() {
-        return productRepository.findAll();
+        return productRepository.findAllWithRelationships();
     }
 
     @Override
@@ -354,7 +354,16 @@ public class ProductServiceImpl implements ProductService {
                 .collect(Collectors.toList());
 
         ProductDTO productDTO = new ProductDTO();
+        // Map full product fields into ProductDTO
+        productDTO.setId(product.getId());
+        productDTO.setSlug(product.getSlug());
         productDTO.setProductName(product.getProductName());
+        productDTO.setSku(product.getSku() != null ? product.getSku() : "");
+        productDTO.setSalePrice(product.getSalePrice() != null ? product.getSalePrice() : BigDecimal.ZERO);
+        productDTO.setComparePrice(product.getComparePrice() != null ? product.getComparePrice() : BigDecimal.ZERO);
+        productDTO.setBuyingPrice(product.getBuyingPrice() != null ? product.getBuyingPrice() : BigDecimal.ZERO);
+        productDTO.setQuantity(product.getQuantity() != null ? product.getQuantity() : 0);
+        productDTO.setShortDescription(product.getShortDescription() != null ? product.getShortDescription() : "");
         productDTO.setCategoryNames(categoryNames);
 
         return productDTO;
@@ -367,6 +376,8 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<Product> getTop3LatestProducts() {
-        return productRepository.findTop3ByOrderByCreatedAtDesc();
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 3);
+        List<Product> products = productRepository.findTop3ByOrderByCreatedAtDescWithRelationships(pageable);
+        return products.stream().limit(3).collect(java.util.stream.Collectors.toList());
     }
 }

@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.math.BigDecimal;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.hibernate.annotations.BatchSize;
 
 @Getter
 @Setter
@@ -83,10 +84,11 @@ public class Product {
     @JsonIgnore
     private StaffAccount updatedBy;
 
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @BatchSize(size = 20)
     private List<ProductCategory> productCategories;
 
-    @OneToOne(mappedBy = "product", cascade = CascadeType.ALL, optional = true)
+    @OneToOne(mappedBy = "product", cascade = CascadeType.ALL, optional = true, fetch = FetchType.LAZY)
     private ProductShippingInfo shippingInfo;
 
     // ✅ THÊM METHOD NÀY - Trả về list ID của categories

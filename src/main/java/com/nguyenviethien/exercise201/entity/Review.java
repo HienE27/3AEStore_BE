@@ -31,6 +31,15 @@ public class Review {
 
     @Column(name = "created_at", nullable = false)
     private Timestamp createdAt; // Thời gian tạo review
+    
+    @Column(name = "visible", columnDefinition = "TINYINT(1) DEFAULT 1")
+    private Boolean visible = true;
+
+    @Column(name = "moderated_by")
+    private String moderatedBy;
+
+    @Column(name = "moderated_at")
+    private Timestamp moderatedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
