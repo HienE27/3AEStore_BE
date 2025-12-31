@@ -17,8 +17,15 @@ public class AIGenerateDescriptionService {
     @Value("${GEMINI_API_KEY:${ai.gemini.api.key:}}")
     private String geminiApiKey;
 
-    @Value("${GEMINI_API_URL:${ai.gemini.api.url:https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent}}")
-    private String geminiApiUrl;
+    // Tách base URL và model name để dễ maintain
+    @Value("${GEMINI_API_BASE:${ai.gemini.api.base:https://generativelanguage.googleapis.com/v1beta}}")
+    private String geminiApiBase;
+
+    @Value("${GEMINI_MODEL:${ai.gemini.api.model:gemini-1.5-flash}}")
+    private String geminiModel;
+
+    // Cache cho model đã chọn (để tránh list models mỗi lần)
+    private String cachedModelName = null;
 
     private final RestTemplate restTemplate;
 
@@ -40,6 +47,23 @@ public class AIGenerateDescriptionService {
             System.out.println("🟢 Gemini API Key length: " + geminiApiKey.length());
             System.out.println("🟢 Gemini API Key prefix: "
                     + geminiApiKey.substring(0, Math.min(15, geminiApiKey.length())) + "...");
+            System.out.println("🔗 API Base: " + geminiApiBase);
+            System.out.println("🤖 Model: " + geminiModel);
+            
+            // Tự động detect và chọn model tốt nhất
+            try {
+                String detectedModel = detectBestModel();
+                if (detectedModel != null && !detectedModel.equals(geminiModel)) {
+                    System.out.println("✨ Auto-detected better model: " + detectedModel);
+                    cachedModelName = detectedModel;
+                } else {
+                    cachedModelName = geminiModel;
+                }
+            } catch (Exception e) {
+                System.out.println("⚠️ Could not auto-detect model, using configured: " + geminiModel);
+                cachedModelName = geminiModel;
+            }
+            
             System.out.println("✅ AI description generation ENABLED (using Gemini)");
         } else {
             System.err.println("⚠️ WARNING: Gemini API key NOT configured!");
@@ -48,6 +72,97 @@ public class AIGenerateDescriptionService {
         }
 
         System.out.println("================================================================");
+    }
+
+    /**
+     * Tự động detect và chọn model tốt nhất từ danh sách models available
+     * Ưu tiên: gemini-2.0-flash > gemini-1.5-flash > gemini-pro > bất kỳ flash model nào
+     */
+    private String detectBestModel() {
+        try {
+            String listModelsUrl = geminiApiBase + "/models?key=" + geminiApiKey;
+            System.out.println("🔍 Auto-detecting best Gemini model...");
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<?> request = new HttpEntity<>(headers);
+            
+            @SuppressWarnings("unchecked")
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    listModelsUrl,
+                    HttpMethod.GET,
+                    request,
+                    (Class<Map<String, Object>>) (Class<?>) Map.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                Map<String, Object> responseBody = response.getBody();
+                
+                if (responseBody.containsKey("models")) {
+                    Object modelsObj = responseBody.get("models");
+                    if (modelsObj instanceof java.util.List) {
+                        @SuppressWarnings("unchecked")
+                        java.util.List<Map<String, Object>> models = (java.util.List<Map<String, Object>>) modelsObj;
+                        
+                        // Ưu tiên các model theo thứ tự
+                        String[] preferredModels = {
+                            "gemini-2.0-flash",
+                            "gemini-1.5-flash",
+                            "gemini-pro",
+                            "gemini-1.5-flash-latest"
+                        };
+                        
+                        // Tìm model tốt nhất
+                        for (String preferred : preferredModels) {
+                            for (Map<String, Object> model : models) {
+                                String modelName = (String) model.get("name");
+                                if (modelName != null && modelName.contains(preferred)) {
+                                    // Kiểm tra xem model có support generateContent không
+                                    Object supportedMethods = model.get("supportedGenerationMethods");
+                                    if (supportedMethods instanceof java.util.List) {
+                                        @SuppressWarnings("unchecked")
+                                        java.util.List<String> methods = (java.util.List<String>) supportedMethods;
+                                        if (methods.contains("generateContent")) {
+                                            // Extract model name từ full path (vd: models/gemini-1.5-flash)
+                                            String[] parts = modelName.split("/");
+                                            if (parts.length > 0) {
+                                                String extractedModel = parts[parts.length - 1];
+                                                System.out.println("✅ Found suitable model: " + extractedModel);
+                                                return extractedModel;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Nếu không tìm thấy preferred, tìm bất kỳ flash model nào
+                        for (Map<String, Object> model : models) {
+                            String modelName = (String) model.get("name");
+                            if (modelName != null && modelName.contains("flash")) {
+                                Object supportedMethods = model.get("supportedGenerationMethods");
+                                if (supportedMethods instanceof java.util.List) {
+                                    @SuppressWarnings("unchecked")
+                                    java.util.List<String> methods = (java.util.List<String>) supportedMethods;
+                                    if (methods.contains("generateContent")) {
+                                        String[] parts = modelName.split("/");
+                                        if (parts.length > 0) {
+                                            String extractedModel = parts[parts.length - 1];
+                                            System.out.println("✅ Found flash model: " + extractedModel);
+                                            return extractedModel;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("⚠️ Could not list models: " + e.getMessage());
+        }
+        
+        // Fallback về model đã config
+        return geminiModel;
     }
 
     /**
@@ -96,8 +211,10 @@ public class AIGenerateDescriptionService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        // Gemini API sử dụng API key trong URL query parameter
-        String apiUrl = geminiApiUrl + "?key=" + geminiApiKey;
+        // Tự động ghép URL từ base + model (không cần hardcode full URL)
+        String modelToUse = cachedModelName != null ? cachedModelName : geminiModel;
+        String apiUrl = geminiApiBase + "/models/" + modelToUse + ":generateContent?key=" + geminiApiKey;
+        System.out.println("🔗 Using endpoint: " + apiUrl.replace(geminiApiKey, "***"));
 
         // Tạo prompt cho Gemini
         String prompt = "Bạn là một chuyên gia về sách và văn học. Hãy viết một mô tả chi tiết, hấp dẫn và chuyên nghiệp về cuốn sách có tên: \""
