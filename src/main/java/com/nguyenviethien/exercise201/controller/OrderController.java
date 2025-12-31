@@ -1099,6 +1099,27 @@ public ResponseEntity<?> updateShippingStatus(
         }
     }
 
+    @GetMapping("/monthly-statistics")
+    public ResponseEntity<?> getMonthlyStatistics() {
+        try {
+            List<Object[]> monthlyStats = orderService.getMonthlyOrderStatistics();
+            
+            List<Map<String, Object>> result = new java.util.ArrayList<>();
+            for (Object[] stat : monthlyStats) {
+                Map<String, Object> monthData = new HashMap<>();
+                monthData.put("year", stat[0]);
+                monthData.put("month", stat[1]);
+                monthData.put("orders", stat[2]);
+                monthData.put("revenue", stat[3]);
+                result.add(monthData);
+            }
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error calculating monthly statistics: " + e.getMessage());
+        }
+    }
+
     // ===== CONVERSION METHODS =====
     private CustomerOrderDTO convertToCustomerOrderDTO(Order order) {
         CustomerOrderDTO dto = new CustomerOrderDTO();
