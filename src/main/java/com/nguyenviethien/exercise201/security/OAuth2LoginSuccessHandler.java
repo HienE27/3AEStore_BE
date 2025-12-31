@@ -19,6 +19,7 @@ import com.nguyenviethien.exercise201.service.JWT.JwtService;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import jakarta.servlet.http.Cookie;
 
 @Component
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
@@ -85,8 +86,25 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
             String token = jwtService.generateTokenForCustomer(customer.getUser_name());
 
+            // Determine frontend to redirect to. Prefer cookie value set by frontend before auth.
+            String targetFrontend = frontendBaseUrl;
+            Cookie[] cookies = request.getCookies();
+            if (cookies != null) {
+                for (Cookie c : cookies) {
+                    if ("oauth_frontend".equals(c.getName()) && c.getValue() != null && !c.getValue().isEmpty()) {
+                        targetFrontend = c.getValue();
+                        // clear cookie
+                        Cookie clear = new Cookie("oauth_frontend", "");
+                        clear.setPath("/");
+                        clear.setMaxAge(0);
+                        response.addCookie(clear);
+                        break;
+                    }
+                }
+            }
+
             // build redirect URL with token and user info
-            String redirect = frontendBaseUrl + "/oauth2/callback?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8)
+            String redirect = targetFrontend + "/oauth2/callback?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8)
                     + "&userId=" + URLEncoder.encode(customer.getId().toString(), StandardCharsets.UTF_8)
                     + "&email=" + URLEncoder.encode(customer.getEmail(), StandardCharsets.UTF_8);
 
