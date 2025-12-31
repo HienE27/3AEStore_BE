@@ -104,13 +104,13 @@ public class AIGenerateDescriptionService {
                         @SuppressWarnings("unchecked")
                         java.util.List<Map<String, Object>> models = (java.util.List<Map<String, Object>>) modelsObj;
 
-                        // Ưu tiên các model theo thứ tự (tránh experimental models: -exp, -beta)
-                        // Experimental models thường không có free tier quota
+                        // Ưu tiên các model theo thứ tự (chỉ chọn models có free tier quota)
+                        // gemini-2.0-flash KHÔNG có free tier (limit: 0) - bỏ qua
+                        // Chỉ gemini-1.5-flash và gemini-pro có free tier (60 req/min)
                         String[] preferredModels = {
-                                "gemini-2.0-flash", // Stable version
-                                "gemini-1.5-flash", // Stable version
-                                "gemini-pro", // Stable version
-                                "gemini-1.5-flash-latest" // Latest stable
+                                "gemini-1.5-flash",      // ✅ Có free tier (60 req/min)
+                                "gemini-pro",            // ✅ Có free tier (60 req/min)
+                                "gemini-1.5-flash-latest" // Latest stable (nếu có)
                         };
 
                         // Tìm model tốt nhất (ưu tiên stable, tránh experimental)
