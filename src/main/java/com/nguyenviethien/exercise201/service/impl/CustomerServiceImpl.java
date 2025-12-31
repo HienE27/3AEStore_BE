@@ -98,13 +98,20 @@ public Customer save(Customer customer) {
     customer.setPassword_hash(encodePassword);
 
     customer.setActive(true);
-    customer.setRegistered_at(new Date());
-    customer.setUpdated_at(new Date());
+    // Không set registered_at và updated_at thủ công - để @CreationTimestamp và @UpdateTimestamp tự động xử lý
+    // customer.setRegistered_at(new Date()); // Removed - handled by @CreationTimestamp
+    // customer.setUpdated_at(new Date()); // Removed - handled by @UpdateTimestamp
 
     // Mặc định khi tạo mới chưa kích hoạt, cần kích hoạt qua email
     customer.setActivated(false);
     customer.setActivationCode(null);
+    
+    // Đảm bảo deleted = false cho customer mới
+    if (customer.getDeleted() == null) {
+        customer.setDeleted(false);
+    }
 
+    // Lưu customer - JPA sẽ tự động generate ID và set timestamps
     Customer savedCustomer = customerRepository.save(customer);
 
     // Gửi mail kích hoạt ngay sau khi tạo thành công

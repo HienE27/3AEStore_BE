@@ -62,7 +62,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<Product> getAllProducts() {
-        return productRepository.findAll();
+        return productRepository.findAllWithRelationships();
     }
 
     @Override
@@ -376,6 +376,8 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<Product> getTop3LatestProducts() {
-        return productRepository.findTop3ByOrderByCreatedAtDesc();
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 3);
+        List<Product> products = productRepository.findTop3ByOrderByCreatedAtDescWithRelationships(pageable);
+        return products.stream().limit(3).collect(java.util.stream.Collectors.toList());
     }
 }
