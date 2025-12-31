@@ -22,45 +22,24 @@ public class DotEnvConfig implements ApplicationContextInitializer<ConfigurableA
 
     @Override
     public void initialize(ConfigurableApplicationContext applicationContext) {
-        // #region agent log
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_dotenv1\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"DotEnvConfig.java:24\",\"message\":\"DotEnvConfig.initialize called\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}\n");
-            fw.close();
-        } catch (IOException ex) {}
-        // #endregion
-        
         ConfigurableEnvironment environment = applicationContext.getEnvironment();
         
-        // Tìm file .env trong thư mục hiện tại (working directory)
-        // Khi chạy từ 3AEStore_BE/, .env sẽ là 3AEStore_BE/.env
+        // Chỉ đọc từ 1 file .env duy nhất: 3AEStore_BE/.env
+        // Tìm file .env trong thư mục hiện tại (khi chạy từ 3AEStore_BE/)
         Path envPath = Paths.get(".env").toAbsolutePath().normalize();
         
-        // Nếu không tìm thấy, thử tìm trong thư mục 3AEStore_BE
+        // Nếu không tìm thấy ở thư mục hiện tại, thử tìm trong 3AEStore_BE/
         if (!Files.exists(envPath)) {
-            Path backendEnvPath = Paths.get("3AEStore_BE/.env").toAbsolutePath().normalize();
+            String workingDir = System.getProperty("user.dir");
+            Path backendEnvPath = Paths.get(workingDir, "3AEStore_BE", ".env").toAbsolutePath().normalize();
             if (Files.exists(backendEnvPath)) {
                 envPath = backendEnvPath;
             }
         }
         
-        // #region agent log
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_dotenv2\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"DotEnvConfig.java:37\",\"message\":\"Checking .env file\",\"data\":{\"path\":\"" + envPath.toString().replace("\\", "\\\\") + "\",\"exists\":\"" + Files.exists(envPath) + "\",\"workingDir\":\"" + System.getProperty("user.dir").replace("\\", "\\\\") + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
-            fw.close();
-        } catch (IOException ex) {}
-        // #endregion
-        
         if (!Files.exists(envPath)) {
             System.out.println("⚠️ File .env not found at: " + envPath.toAbsolutePath());
-            // #region agent log
-            try {
-                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_dotenv3\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"DotEnvConfig.java:33\",\"message\":\".env file not found, exiting\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
-                fw.close();
-            } catch (IOException ex) {}
-            // #endregion
+            System.out.println("💡 Create .env file in 3AEStore_BE/ directory with GEMINI_API_KEY");
             return;
         }
         
@@ -95,36 +74,12 @@ public class DotEnvConfig implements ApplicationContextInitializer<ConfigurableA
                     
                     envProperties.put(key, value);
                     System.out.println("📋 Loaded env var: " + key + " (length: " + value.length() + ")");
-                    
-                    // #region agent log
-                    try {
-                        java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-                        fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_dotenv4\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"DotEnvConfig.java:63\",\"message\":\"Parsed env variable\",\"data\":{\"key\":\"" + key + "\",\"valueLength\":\"" + value.length() + "\",\"valuePrefix\":\"" + (value.length() > 20 ? value.substring(0, 20) : value) + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}\n");
-                        fw.close();
-                    } catch (IOException ex2) {}
-                    // #endregion
                 }
             }
-            
-            // #region agent log
-            try {
-                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_dotenv5\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"DotEnvConfig.java:69\",\"message\":\"Before adding to Spring environment\",\"data\":{\"propertiesCount\":\"" + envProperties.size() + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\"}\n");
-                fw.close();
-            } catch (IOException ex) {}
-            // #endregion
             
             // Add properties to Spring environment
             MapPropertySource propertySource = new MapPropertySource("dotenv", envProperties);
             environment.getPropertySources().addFirst(propertySource);
-            
-            // #region agent log
-            try {
-                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_dotenv6\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"DotEnvConfig.java:73\",\"message\":\"After adding to Spring environment\",\"data\":{\"propertiesCount\":\"" + envProperties.size() + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\"}\n");
-                fw.close();
-            } catch (IOException ex) {}
-            // #endregion
             
             System.out.println("✅ Successfully loaded " + envProperties.size() + " environment variables from .env");
             

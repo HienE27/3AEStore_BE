@@ -16,7 +16,7 @@ public class AIGenerateDescriptionService {
     // Google Gemini API Configuration (Free tier available)
     @Value("${GEMINI_API_KEY:${ai.gemini.api.key:}}")
     private String geminiApiKey;
-    
+
     @Value("${GEMINI_API_URL:${ai.gemini.api.url:https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent}}")
     private String geminiApiUrl;
 
@@ -35,17 +35,18 @@ public class AIGenerateDescriptionService {
     public void init() {
         System.out.println("🚀 ========== AIGenerateDescriptionService Initialized ==========");
         System.out.println("🟢 Gemini API Key loaded: " + (geminiApiKey != null && !geminiApiKey.trim().isEmpty()));
-        
+
         if (geminiApiKey != null && !geminiApiKey.trim().isEmpty()) {
             System.out.println("🟢 Gemini API Key length: " + geminiApiKey.length());
-            System.out.println("🟢 Gemini API Key prefix: " + geminiApiKey.substring(0, Math.min(15, geminiApiKey.length())) + "...");
+            System.out.println("🟢 Gemini API Key prefix: "
+                    + geminiApiKey.substring(0, Math.min(15, geminiApiKey.length())) + "...");
             System.out.println("✅ AI description generation ENABLED (using Gemini)");
         } else {
             System.err.println("⚠️ WARNING: Gemini API key NOT configured!");
             System.err.println("⚠️ Get free API key: https://makersuite.google.com/app/apikey");
             System.err.println("⚠️ Will use fallback template-based generation");
         }
-        
+
         System.out.println("================================================================");
     }
 
@@ -62,7 +63,7 @@ public class AIGenerateDescriptionService {
 
         System.out.println("🔍 ========== AI Generate Description ==========");
         System.out.println("📖 Product Name: " + productName);
-        
+
         // Try Gemini API
         if (geminiApiKey != null && !geminiApiKey.trim().isEmpty()) {
             System.out.println("🟢 Using Google Gemini API");
