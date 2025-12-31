@@ -17,7 +17,7 @@ public class AIGenerateDescriptionService {
     @Value("${GEMINI_API_KEY:${ai.gemini.api.key:}}")
     private String geminiApiKey;
 
-    @Value("${GEMINI_API_URL:${ai.gemini.api.url:https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent}}")
+    @Value("${GEMINI_API_URL:${ai.gemini.api.url:https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent}}")
     private String geminiApiUrl;
 
     private final RestTemplate restTemplate;
