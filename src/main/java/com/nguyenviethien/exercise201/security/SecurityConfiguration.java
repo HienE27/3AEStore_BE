@@ -9,7 +9,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -22,6 +21,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import com.nguyenviethien.exercise201.service.JWT.JwtFilter;
 import com.nguyenviethien.exercise201.service.util.CustomerSecurityService;
 import com.nguyenviethien.exercise201.service.util.StaffAccountSecurityService;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 
 import java.util.Arrays;
 
@@ -71,12 +71,20 @@ public class SecurityConfiguration {
                     .requestMatchers(HttpMethod.DELETE, "/api/news/**").permitAll()
                     .requestMatchers(HttpMethod.OPTIONS, "/api/news/**").permitAll()
                 
+                // Allow OAuth2 endpoints
+                    .requestMatchers("/oauth2/**").permitAll()
+                    .requestMatchers("/login/oauth2/**").permitAll()
                 // Default - yêu cầu authentication
-                .anyRequest().permitAll()  // Keep permitAll for debugging
+                    .anyRequest().permitAll()  // Keep permitAll for debugging
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .csrf(AbstractHttpConfigurer::disable)
             .userDetailsService(staffDetailsService);
+
+        // Configure OAuth2 login success handler
+        http.oauth2Login(oauth2 -> oauth2
+                .successHandler(oauth2LoginSuccessHandler())
+        );
 
         // CORS configuration - ENHANCED
         http.cors(cors -> cors.configurationSource(request -> {
@@ -93,6 +101,11 @@ public class SecurityConfiguration {
          http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         
         return http.build();
+    }
+
+    @Bean
+    public AuthenticationSuccessHandler oauth2LoginSuccessHandler() {
+        return new OAuth2LoginSuccessHandler();
     }
 
     @Bean
