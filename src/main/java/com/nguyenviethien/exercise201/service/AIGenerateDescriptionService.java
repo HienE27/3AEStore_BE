@@ -107,9 +107,9 @@ public class AIGenerateDescriptionService {
                         // Ưu tiên các model theo thứ tự (tránh experimental models: -exp, -beta)
                         // Experimental models thường không có free tier quota
                         String[] preferredModels = {
-                                "gemini-2.0-flash",      // Stable version
-                                "gemini-1.5-flash",      // Stable version
-                                "gemini-pro",            // Stable version
+                                "gemini-2.0-flash", // Stable version
+                                "gemini-1.5-flash", // Stable version
+                                "gemini-pro", // Stable version
                                 "gemini-1.5-flash-latest" // Latest stable
                         };
 
@@ -118,12 +118,13 @@ public class AIGenerateDescriptionService {
                             for (Map<String, Object> model : models) {
                                 String modelName = (String) model.get("name");
                                 if (modelName != null && modelName.contains(preferred)) {
-                                    // Bỏ qua experimental models (không có free tier quota)
+                                    // Bỏ qua experimental models và gemini-2.0 (không có free tier quota)
                                     if (modelName.contains("-exp") || modelName.contains("-beta") || 
-                                        modelName.contains("experimental")) {
+                                        modelName.contains("experimental") || 
+                                        modelName.contains("gemini-2.0")) {
                                         continue;
                                     }
-                                    
+
                                     // Kiểm tra xem model có support generateContent không
                                     Object supportedMethods = model.get("supportedGenerationMethods");
                                     if (supportedMethods instanceof java.util.List) {
@@ -148,11 +149,11 @@ public class AIGenerateDescriptionService {
                             String modelName = (String) model.get("name");
                             if (modelName != null && modelName.contains("flash")) {
                                 // Bỏ qua experimental models (không có free tier quota)
-                                if (modelName.contains("-exp") || modelName.contains("-beta") || 
-                                    modelName.contains("experimental")) {
+                                if (modelName.contains("-exp") || modelName.contains("-beta") ||
+                                        modelName.contains("experimental")) {
                                     continue;
                                 }
-                                
+
                                 Object supportedMethods = model.get("supportedGenerationMethods");
                                 if (supportedMethods instanceof java.util.List) {
                                     @SuppressWarnings("unchecked")
@@ -326,7 +327,7 @@ public class AIGenerateDescriptionService {
             System.err.println("❌ HTTP Error calling Gemini API");
             System.err.println("   Status: " + e.getStatusCode());
             System.err.println("   Message: " + e.getMessage());
-            
+
             // Nếu gặp 429 (quota exceeded) với experimental model, log warning
             if (e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
                 String currentModel = cachedModelName != null ? cachedModelName : geminiModel;
@@ -335,7 +336,7 @@ public class AIGenerateDescriptionService {
                     System.err.println("💡 Tip: Auto-detection will skip experimental models on next restart");
                 }
             }
-            
+
             if (e.getResponseBodyAsString() != null) {
                 System.err.println("   Response: " + e.getResponseBodyAsString());
             }
