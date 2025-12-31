@@ -9,6 +9,7 @@ import java.util.Date;
 import java.util.UUID;
 import java.util.List;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @Getter
 @Setter
@@ -16,6 +17,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 @AllArgsConstructor
 @Entity
 @Table(name = "categories")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Category {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -27,6 +29,7 @@ public class Category {
     private Category parent;
 
     @OneToMany(mappedBy = "parent")
+    @JsonIgnore
     private List<Category> subCategories;
 
     @Column(name = "category_name", nullable = false, unique = true)

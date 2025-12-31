@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProductDTO {
+public class ProductDto {
     private java.util.UUID id;
     private String slug;
     private String productName;
@@ -20,6 +20,4 @@ public class ProductDTO {
     private BigDecimal buyingPrice;
     private Integer quantity;
     private String shortDescription;
-    private java.util.List<String> categoryNames;
 }
-

@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @Getter
 @Setter
@@ -14,6 +15,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 @AllArgsConstructor
 @Entity
 @Table(name = "product_categories")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class ProductCategory {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -24,8 +26,7 @@ public class ProductCategory {
     @JsonIgnore
     private Product product;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "category_id", nullable = false)
-    @JsonIgnore
     private Category category;
 }

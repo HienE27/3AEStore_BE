@@ -19,9 +19,9 @@ public class ReviewDto {
     private Float ratingPoint;
     private Integer rating;
     private Timestamp createdAt;
-    private com.nguyenviethien.exercise201.DTO.ProductDTO product;
-    private com.nguyenviethien.exercise201.DTO.CustomerDto customer;
-    private java.util.List<com.nguyenviethien.exercise201.DTO.ReviewImageDto> images;
+    private com.nguyenviethien.exercise201.DTO.ProductDto product;
+    private CustomerDto customer;
+    private List<ReviewImageDto> images;
 }
 
 

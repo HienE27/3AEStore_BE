@@ -6,7 +6,7 @@ import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
 
-import com.nguyenviethien.exercise201.DTO.ProductDTO;
+import com.nguyenviethien.exercise201.DTO.ProductDetailsDTO;
 import com.nguyenviethien.exercise201.entity.Product;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -24,7 +24,7 @@ public interface ProductService {
 
     public ResponseEntity<?> deleteProduct(UUID productId);
 
-    public ProductDTO getProductDetails(UUID productId);
+    public ProductDetailsDTO getProductDetails(UUID productId);
 
     public List<Product> getProductsByCategoryId(UUID categoryId);
 

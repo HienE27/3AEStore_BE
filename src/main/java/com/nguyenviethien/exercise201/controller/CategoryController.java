@@ -1,6 +1,8 @@
 package com.nguyenviethien.exercise201.controller;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -12,14 +14,64 @@ import com.nguyenviethien.exercise201.service.CategoryService;
 
 @RestController
 @RequestMapping("/api/categories")
+@CrossOrigin(origins = {"http://localhost:3000", "http://127.0.0.1:3000"})
 public class CategoryController {
 
     @Autowired
     private CategoryService categoryService;
 
     @GetMapping
-    public ResponseEntity<List<Category>> getAllCategories() {
-        return ResponseEntity.ok(categoryService.findAll());
+    public ResponseEntity<?> getAllCategories() {
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_1\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"CategoryController.java:24\",\"message\":\"getAllCategories entry\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}\n");
+            fw.close();
+        } catch (java.io.IOException ex) {}
+        // #endregion
+        try {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_2\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"CategoryController.java:26\",\"message\":\"Before calling categoryService.findAll\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            List<Category> categories = categoryService.findAll();
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_3\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"CategoryController.java:28\",\"message\":\"After calling categoryService.findAll\",\"data\":{\"categoryCount\":\"" + (categories != null ? categories.size() : 0) + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            
+            // Format response theo Spring Data REST format để match với frontend
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_4\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"CategoryController.java:32\",\"message\":\"Before building response\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            Map<String, Object> response = new HashMap<>();
+            Map<String, Object> embedded = new HashMap<>();
+            embedded.put("categories", categories);
+            response.put("_embedded", embedded);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_5\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"CategoryController.java:36\",\"message\":\"Exception in getAllCategories\",\"data\":{\"error\":\"" + e.getClass().getName() + "\",\"message\":\"" + e.getMessage().replace("\"", "'") + "\",\"stackTrace\":\"" + java.util.Arrays.toString(e.getStackTrace()).replace("\"", "'").substring(0, Math.min(500, java.util.Arrays.toString(e.getStackTrace()).replace("\"", "'").length())) + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            System.err.println("💥 Error getting all categories: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @GetMapping("/{id}")

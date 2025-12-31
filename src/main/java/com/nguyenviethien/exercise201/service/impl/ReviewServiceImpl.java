@@ -130,10 +130,32 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional(readOnly = true)
     public List<Review> getReviewsByProduct(UUID productId) {
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_13\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"ReviewServiceImpl.java:132\",\"message\":\"getReviewsByProduct entry\",\"data\":{\"productId\":\"" + productId + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
+            fw.close();
+        } catch (Exception ex) {}
+        // #endregion
         Product product = productRepository.findById(productId).orElse(null);
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_14\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"ReviewServiceImpl.java:134\",\"message\":\"Product lookup\",\"data\":{\"productFound\":" + (product != null) + "},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
+            fw.close();
+        } catch (Exception ex) {}
+        // #endregion
         if (product == null) return List.of();
 
-        return reviewRepository.findByProductOrderByCreatedAtDesc(product);
+        List<Review> reviews = reviewRepository.findByProductOrderByCreatedAtDesc(product);
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_15\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"ReviewServiceImpl.java:137\",\"message\":\"Reviews fetched from DB\",\"data\":{\"reviewCount\":\"" + (reviews != null ? reviews.size() : 0) + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
+            fw.close();
+        } catch (Exception ex) {}
+        // #endregion
+        return reviews;
     }
 
     @Override
@@ -157,10 +179,24 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional(readOnly = true)
     public Double getAverageRating(UUID productId) {
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_16\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"ReviewServiceImpl.java:159\",\"message\":\"getAverageRating entry\",\"data\":{\"productId\":\"" + productId + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"F\"}\n");
+            fw.close();
+        } catch (Exception ex) {}
+        // #endregion
         Product product = productRepository.findById(productId).orElse(null);
         if (product == null) return 0.0;
 
         Double avg = reviewRepository.findAverageRatingByProduct(product);
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_17\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"ReviewServiceImpl.java:164\",\"message\":\"Average rating calculated\",\"data\":{\"averageRating\":\"" + (avg != null ? avg : "null") + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"F\"}\n");
+            fw.close();
+        } catch (Exception ex) {}
+        // #endregion
         return avg != null ? avg : 0.0;
     }
 

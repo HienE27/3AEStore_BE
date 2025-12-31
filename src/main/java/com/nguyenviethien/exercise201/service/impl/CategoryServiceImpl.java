@@ -26,7 +26,40 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     public List<Category> findAll() {
-        return categoryRepository.findAll();
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_6\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"CategoryServiceImpl.java:28\",\"message\":\"findAll entry\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
+            fw.close();
+        } catch (java.io.IOException ex) {}
+        // #endregion
+        try {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_7\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"CategoryServiceImpl.java:30\",\"message\":\"Before calling categoryRepository.findAll\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            List<Category> result = categoryRepository.findAll();
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_8\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"CategoryServiceImpl.java:32\",\"message\":\"After calling categoryRepository.findAll\",\"data\":{\"categoryCount\":\"" + (result != null ? result.size() : 0) + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            return result;
+        } catch (Exception e) {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
+                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_9\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"CategoryServiceImpl.java:34\",\"message\":\"Exception in findAll\",\"data\":{\"error\":\"" + e.getClass().getName() + "\",\"message\":\"" + e.getMessage().replace("\"", "'") + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}\n");
+                fw.close();
+            } catch (java.io.IOException ex) {}
+            // #endregion
+            throw e;
+        }
     }
 
     @Override
