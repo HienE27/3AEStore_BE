@@ -13,15 +13,19 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class AIGenerateDescriptionService {
 
-    // Đọc từ environment variable OPENAI_API_KEY trước, nếu không có thì đọc từ
-    // application.properties
+    // OpenAI API Configuration (Optional - fallback if Gemini fails)
     @Value("${OPENAI_API_KEY:${ai.openai.api.key:}}")
     private String openAiApiKey;
 
-    // Đọc từ environment variable OPENAI_API_URL trước, nếu không có thì đọc từ
-    // application.properties
     @Value("${OPENAI_API_URL:${ai.openai.api.url:https://api.openai.com/v1/chat/completions}}")
     private String openAiApiUrl;
+    
+    // Google Gemini API Configuration (Primary - Free tier available)
+    @Value("${GEMINI_API_KEY:${ai.gemini.api.key:}}")
+    private String geminiApiKey;
+    
+    @Value("${GEMINI_API_URL:${ai.gemini.api.url:https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent}}")
+    private String geminiApiUrl;
 
     private final RestTemplate restTemplate;
 
@@ -36,32 +40,28 @@ public class AIGenerateDescriptionService {
     // Post-construct để log sau khi Spring inject values
     @PostConstruct
     public void init() {
-        // #region agent log
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_ai1\",\"timestamp\":"
-                    + System.currentTimeMillis()
-                    + ",\"location\":\"AIGenerateDescriptionService.java:38\",\"message\":\"AIGenerateDescriptionService @PostConstruct\",\"data\":{\"apiKeyIsNull\":\""
-                    + (openAiApiKey == null) + "\",\"apiKeyIsEmpty\":\""
-                    + (openAiApiKey != null && openAiApiKey.trim().isEmpty()) + "\",\"apiKeyLength\":\""
-                    + (openAiApiKey != null ? openAiApiKey.length() : 0) + "\",\"apiUrl\":\"" + openAiApiUrl
-                    + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\"}\n");
-            fw.close();
-        } catch (java.io.IOException ex) {
-        }
-        // #endregion
-
         System.out.println("🚀 ========== AIGenerateDescriptionService Initialized ==========");
-        System.out.println("🔑 API Key loaded: " + (openAiApiKey != null && !openAiApiKey.trim().isEmpty()));
-        if (openAiApiKey != null && !openAiApiKey.trim().isEmpty()) {
-            System.out.println("🔑 API Key length: " + openAiApiKey.length());
-            System.out.println(
-                    "🔑 API Key prefix: " + openAiApiKey.substring(0, Math.min(20, openAiApiKey.length())) + "...");
-        } else {
-            System.err.println("⚠️ WARNING: OpenAI API key is NOT configured!");
-            System.err.println("⚠️ Check application.properties for: ai.openai.api.key");
+        
+        // Gemini API
+        System.out.println("🟢 Gemini API Key loaded: " + (geminiApiKey != null && !geminiApiKey.trim().isEmpty()));
+        if (geminiApiKey != null && !geminiApiKey.trim().isEmpty()) {
+            System.out.println("🟢 Gemini API Key length: " + geminiApiKey.length());
+            System.out.println("🟢 Gemini API Key prefix: " + geminiApiKey.substring(0, Math.min(15, geminiApiKey.length())) + "...");
         }
-        System.out.println("🔗 API URL: " + openAiApiUrl);
+        
+        // OpenAI API
+        System.out.println("🔵 OpenAI API Key loaded: " + (openAiApiKey != null && !openAiApiKey.trim().isEmpty()));
+        if (openAiApiKey != null && !openAiApiKey.trim().isEmpty()) {
+            System.out.println("🔵 OpenAI API Key length: " + openAiApiKey.length());
+            System.out.println("🔵 OpenAI API Key prefix: " + openAiApiKey.substring(0, Math.min(15, openAiApiKey.length())) + "...");
+        }
+        
+        if ((geminiApiKey == null || geminiApiKey.trim().isEmpty()) && 
+            (openAiApiKey == null || openAiApiKey.trim().isEmpty())) {
+            System.err.println("⚠️ WARNING: No AI API keys configured!");
+            System.err.println("⚠️ Will use fallback template-based generation");
+        }
+        
         System.out.println("================================================================");
     }
 
@@ -76,43 +76,164 @@ public class AIGenerateDescriptionService {
             return "";
         }
 
-        // Debug: Log API key status
-        System.out.println("🔍 ========== AI Generate Description Debug ==========");
+        System.out.println("🔍 ========== AI Generate Description ==========");
         System.out.println("📖 Product Name: " + productName);
-        System.out.println("🔑 API Key is null: " + (openAiApiKey == null));
-        System.out.println("🔑 API Key is empty: " + (openAiApiKey != null && openAiApiKey.trim().isEmpty()));
-        if (openAiApiKey != null && !openAiApiKey.trim().isEmpty()) {
-            System.out.println("🔑 API Key length: " + openAiApiKey.length());
-            System.out.println(
-                    "🔑 API Key starts with: " + openAiApiKey.substring(0, Math.min(10, openAiApiKey.length())));
-        }
-        System.out.println("🔗 API URL: " + openAiApiUrl);
-        System.out.println("=====================================================");
-
-        // If OpenAI API key is not configured, use fallback template-based generation
-        if (openAiApiKey == null || openAiApiKey.trim().isEmpty()) {
-            System.out.println("⚠️ OpenAI API key not configured, using fallback template");
-            return generateFallbackDescription(productName);
-        }
-
-        try {
-            String description = generateWithOpenAI(productName);
-            if (description != null && !description.trim().isEmpty()) {
-                return description;
-            } else {
-                System.out.println("⚠️ Empty description from OpenAI, using fallback");
-                return generateFallbackDescription(productName);
+        
+        // Priority 1: Try Gemini API (Free tier available)
+        if (geminiApiKey != null && !geminiApiKey.trim().isEmpty()) {
+            System.out.println("🟢 Using Google Gemini API (Primary)");
+            try {
+                String description = generateWithGemini(productName);
+                if (description != null && !description.trim().isEmpty()) {
+                    System.out.println("✅ Success with Gemini API");
+                    return description;
+                }
+            } catch (Exception e) {
+                System.err.println("⚠️ Gemini API failed: " + e.getMessage());
+                // Continue to try OpenAI
             }
-        } catch (Exception e) {
-            System.err.println("❌ Error calling OpenAI API: " + e.getMessage());
-            e.printStackTrace();
-            // Fallback to template-based generation
-            return generateFallbackDescription(productName);
+        } else {
+            System.out.println("⚠️ Gemini API key not configured");
         }
+
+        // Priority 2: Try OpenAI API (Fallback)
+        if (openAiApiKey != null && !openAiApiKey.trim().isEmpty()) {
+            System.out.println("🔵 Using OpenAI API (Fallback)");
+            try {
+                String description = generateWithOpenAI(productName);
+                if (description != null && !description.trim().isEmpty()) {
+                    System.out.println("✅ Success with OpenAI API");
+                    return description;
+                }
+            } catch (Exception e) {
+                System.err.println("⚠️ OpenAI API failed: " + e.getMessage());
+            }
+        } else {
+            System.out.println("⚠️ OpenAI API key not configured");
+        }
+
+        // Final fallback: Template-based generation
+        System.out.println("⚠️ Using template-based generation");
+        return generateFallbackDescription(productName);
     }
 
     /**
-     * Generate description using OpenAI API
+     * Generate description using Google Gemini API (Primary - Free tier)
+     */
+    private String generateWithGemini(String productName) {
+        System.out.println("🟢 Calling Google Gemini API for book: " + productName);
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        
+        // Gemini API sử dụng API key trong URL query parameter
+        String apiUrl = geminiApiUrl + "?key=" + geminiApiKey;
+        
+        // Tạo prompt cho Gemini
+        String prompt = "Bạn là một chuyên gia về sách và văn học. Hãy viết một mô tả chi tiết, hấp dẫn và chuyên nghiệp về cuốn sách có tên: \"" 
+                + productName + "\".\n\n" +
+                "Yêu cầu:\n" +
+                "1. Nếu bạn biết về cuốn sách này, hãy viết mô tả dựa trên kiến thức thực tế về nội dung, tác giả, thể loại, và ý nghĩa của cuốn sách.\n" +
+                "2. Nếu bạn không chắc chắn về cuốn sách cụ thể, hãy suy luận dựa trên tên sách và viết mô tả phù hợp với thể loại có thể của nó.\n" +
+                "3. Mô tả nên bao gồm:\n" +
+                "   - Giới thiệu tổng quan về cuốn sách\n" +
+                "   - Nội dung chính hoặc cốt truyện (nếu là tiểu thuyết)\n" +
+                "   - Thông điệp hoặc bài học từ sách\n" +
+                "   - Đối tượng độc giả phù hợp\n" +
+                "   - Điểm nổi bật và giá trị của cuốn sách\n" +
+                "4. Viết bằng tiếng Việt, tự nhiên và thu hút.\n" +
+                "5. Trả về kết quả dưới dạng HTML với các thẻ <h3>, <h4>, <p>, <ul>, <li> để định dạng đẹp.\n" +
+                "6. Độ dài khoảng 300-500 từ, đủ chi tiết để người đọc hiểu rõ về cuốn sách.";
+        
+        // Gemini API request format
+        Map<String, Object> requestBody = new HashMap<>();
+        
+        Map<String, Object> part = new HashMap<>();
+        part.put("text", prompt);
+        
+        Map<String, Object> content = new HashMap<>();
+        content.put("parts", new Object[]{part});
+        
+        requestBody.put("contents", new Object[]{content});
+        
+        // Generation config
+        Map<String, Object> generationConfig = new HashMap<>();
+        generationConfig.put("temperature", 0.8);
+        generationConfig.put("maxOutputTokens", 2000);
+        requestBody.put("generationConfig", generationConfig);
+        
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+        
+        try {
+            System.out.println("📤 Sending request to Gemini API...");
+            
+            @SuppressWarnings("unchecked")
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    apiUrl,
+                    HttpMethod.POST,
+                    request,
+                    (Class<Map<String, Object>>) (Class<?>) Map.class);
+
+            System.out.println("📥 Response status: " + response.getStatusCode());
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                Map<String, Object> responseBody = response.getBody();
+                
+                // Parse Gemini response format
+                if (responseBody.containsKey("candidates")) {
+                    Object candidatesObj = responseBody.get("candidates");
+                    if (candidatesObj instanceof java.util.List && !((java.util.List<?>) candidatesObj).isEmpty()) {
+                        Object firstCandidate = ((java.util.List<?>) candidatesObj).get(0);
+                        if (firstCandidate instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> candidate = (Map<String, Object>) firstCandidate;
+                            if (candidate.containsKey("content")) {
+                                Object contentObj = candidate.get("content");
+                                if (contentObj instanceof Map) {
+                                    @SuppressWarnings("unchecked")
+                                    Map<String, Object> contentMap = (Map<String, Object>) contentObj;
+                                    if (contentMap.containsKey("parts")) {
+                                        Object partsObj = contentMap.get("parts");
+                                        if (partsObj instanceof java.util.List && !((java.util.List<?>) partsObj).isEmpty()) {
+                                            Object firstPart = ((java.util.List<?>) partsObj).get(0);
+                                            if (firstPart instanceof Map) {
+                                                @SuppressWarnings("unchecked")
+                                                Map<String, Object> partMap = (Map<String, Object>) firstPart;
+                                                if (partMap.containsKey("text")) {
+                                                    String description = partMap.get("text").toString();
+                                                    System.out.println("✅ Successfully generated description from Gemini (length: "
+                                                            + description.length() + " chars)");
+                                                    return description;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                System.err.println("⚠️ Unexpected response format from Gemini API");
+                System.err.println("Response body keys: " + responseBody.keySet());
+            }
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            System.err.println("❌ HTTP Error calling Gemini API");
+            System.err.println("   Status: " + e.getStatusCode());
+            System.err.println("   Message: " + e.getMessage());
+            if (e.getResponseBodyAsString() != null) {
+                System.err.println("   Response: " + e.getResponseBodyAsString());
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error calling Gemini API: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return null; // Return null to try next provider
+    }
+    
+    /**
+     * Generate description using OpenAI API (Fallback)
      */
     private String generateWithOpenAI(String productName) {
         System.out.println("🔍 Calling OpenAI API for book: " + productName);
