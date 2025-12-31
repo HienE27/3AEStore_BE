@@ -9,6 +9,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 import com.nguyenviethien.exercise201.entity.Customer;
 import com.nguyenviethien.exercise201.repository.CustomerRepository;
@@ -28,8 +29,9 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     @Autowired
     private JwtService jwtService;
 
-    // Frontend callback URL (adjust if needed)
-    private final String FRONTEND_CALLBACK = "http://localhost:3000/oauth2/callback";
+    // Frontend callback base URL (set via env var APP_BASE_URL, default to http://localhost:3000)
+    @Value("${APP_BASE_URL:http://localhost:3000}")
+    private String frontendBaseUrl;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
@@ -84,7 +86,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             String token = jwtService.generateTokenForCustomer(customer.getUser_name());
 
             // build redirect URL with token and user info
-            String redirect = FRONTEND_CALLBACK + "?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8)
+            String redirect = frontendBaseUrl + "/oauth2/callback?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8)
                     + "&userId=" + URLEncoder.encode(customer.getId().toString(), StandardCharsets.UTF_8)
                     + "&email=" + URLEncoder.encode(customer.getEmail(), StandardCharsets.UTF_8);
 
@@ -93,7 +95,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         }
 
         // default fallback
-        response.sendRedirect(FRONTEND_CALLBACK + "?error=oauth_error");
+        response.sendRedirect(frontendBaseUrl + "/oauth2/callback?error=oauth_error");
     }
 }
 
