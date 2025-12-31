@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -64,14 +65,12 @@ public class CustomerController {
         Page<Customer> customerPage = customerService.findAll(pageable);
 
         CustomerPageResponse response = new CustomerPageResponse(
-            customerPage.getContent(),
-            new CustomerPageResponse.PageMetadata(
-                customerPage.getSize(),
-                customerPage.getTotalElements(),
-                customerPage.getTotalPages(),
-                customerPage.getNumber()
-            )
-        );
+                customerPage.getContent(),
+                new CustomerPageResponse.PageMetadata(
+                        customerPage.getSize(),
+                        customerPage.getTotalElements(),
+                        customerPage.getTotalPages(),
+                        customerPage.getNumber()));
 
         return ResponseEntity.ok(response);
     }
@@ -95,35 +94,35 @@ public class CustomerController {
         try {
             Customer customer = customerRepository.findById(customerId)
                     .orElseThrow(() -> new RuntimeException("Customer not found"));
-            
+
             CustomerProfileResponse response = new CustomerProfileResponse();
             response.setId(customer.getId());
             response.setFirstName(customer.getFirst_name());
             response.setLastName(customer.getLast_name());
             response.setEmail(customer.getEmail());
-            
+
             // Lấy số điện thoại từ địa chỉ mặc định hoặc địa chỉ mới nhất
             try {
                 List<CustomerAddress> addresses = customerAddressService.findByCustomer(customer);
                 String phoneNumber = "";
-                
+
                 if (!addresses.isEmpty()) {
                     // Tìm địa chỉ mặc định
                     CustomerAddress defaultAddress = addresses.stream()
-                        .filter(addr -> addr.getIsDefault() != null && addr.getIsDefault())
-                        .findFirst()
-                        .orElse(addresses.get(0)); // Nếu không có default, lấy địa chỉ đầu tiên
-                    
+                            .filter(addr -> addr.getIsDefault() != null && addr.getIsDefault())
+                            .findFirst()
+                            .orElse(addresses.get(0)); // Nếu không có default, lấy địa chỉ đầu tiên
+
                     phoneNumber = defaultAddress.getPhone_number();
                 }
-                
+
                 response.setPhoneNumber(phoneNumber);
             } catch (Exception e) {
                 // Nếu có lỗi khi lấy address, để trống phone number
                 response.setPhoneNumber("");
                 System.out.println("Warning: Could not get phone number from addresses: " + e.getMessage());
             }
-            
+
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             System.err.println("Error getting customer profile: " + e.getMessage());
@@ -154,23 +153,17 @@ public class CustomerController {
                 return ResponseEntity.badRequest().body("Email không được để trống");
             }
 
-            // Nếu customer có ID, kiểm tra xem đã tồn tại chưa
-            if (customer.getId() != null) {
-                if (customerService.existsById(customer.getId())) {
-                    return ResponseEntity.badRequest()
-                        .body("Customer với ID " + customer.getId() + " đã tồn tại");
-                }
-                System.out.println("Using provided customer ID: " + customer.getId());
-            } else {
-                // Nếu không có ID, tạo ID mới
-                customer.setId(UUID.randomUUID());
-                System.out.println("Generated new customer ID: " + customer.getId());
-            }
-
-            // Kiểm tra email đã tồn tại chưa
+            // Kiểm tra email đã tồn tại chưa (kiểm tra trước để tránh conflict)
             if (customerService.existsByEmail(customer.getEmail())) {
                 return ResponseEntity.badRequest()
-                    .body("Email " + customer.getEmail() + " đã được sử dụng");
+                        .body("Email " + customer.getEmail() + " đã được sử dụng");
+            }
+
+            // Không set ID thủ công - để JPA tự generate thông qua @GeneratedValue
+            // Nếu có ID từ request, xóa đi để tránh conflict với JPA ID generation
+            if (customer.getId() != null) {
+                System.out.println("Warning: ID provided in request will be ignored. JPA will auto-generate ID.");
+                customer.setId(null);
             }
 
             // Thiết lập các giá trị mặc định nếu chưa có
@@ -218,15 +211,36 @@ public class CustomerController {
 
             return ResponseEntity.ok(response);
 
+        } catch (OptimisticLockingFailureException e) {
+            System.out.println("Optimistic locking failure: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body("Đã xảy ra lỗi đồng thời. Vui lòng thử lại sau vài giây.");
         } catch (DataIntegrityViolationException e) {
             System.out.println("Data integrity violation: " + e.getMessage());
+            String errorMessage = e.getMessage();
+            if (errorMessage != null && errorMessage.contains("email")) {
+                return ResponseEntity.badRequest()
+                        .body("Email " + customer.getEmail() + " đã được sử dụng");
+            }
             return ResponseEntity.badRequest()
-                .body("Dữ liệu không hợp lệ hoặc vi phạm ràng buộc: " + e.getMessage());
+                    .body("Dữ liệu không hợp lệ hoặc vi phạm ràng buộc: " + e.getMessage());
+        } catch (IllegalArgumentException e) {
+            System.out.println("Validation error: " + e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(e.getMessage());
         } catch (Exception e) {
             System.out.println("Error creating customer: " + e.getMessage());
             e.printStackTrace();
+            // Kiểm tra nếu là lỗi transaction/concurrency
+            String errorMessage = e.getMessage();
+            if (errorMessage != null && (errorMessage.contains("Row was updated") ||
+                    errorMessage.contains("transaction") ||
+                    errorMessage.contains("concurrent"))) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body("Đã xảy ra lỗi khi tạo tài khoản. Vui lòng thử lại sau vài giây.");
+            }
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body("Lỗi khi tạo customer: " + e.getMessage());
+                    .body("Lỗi khi tạo customer: " + e.getMessage());
         }
     }
 
@@ -237,12 +251,12 @@ public class CustomerController {
         Map<String, Object> response = new HashMap<>();
         response.put("exists", exists);
         response.put("customerId", id.toString());
-        
+
         if (exists) {
             Customer customer = customerService.findById(id).orElse(null);
             response.put("customer", customer);
         }
-        
+
         return ResponseEntity.ok(response);
     }
 
@@ -252,15 +266,15 @@ public class CustomerController {
             @RequestParam(required = false) String email,
             @RequestParam(required = false) String username,
             @RequestParam(required = false) String id) {
-        
+
         try {
             System.out.println("=== SEARCH CUSTOMERS ===");
             System.out.println("Email: " + email);
             System.out.println("Username: " + username);
             System.out.println("ID: " + id);
-            
+
             List<Customer> customers = new ArrayList<>();
-            
+
             if (email != null && !email.trim().isEmpty()) {
                 System.out.println("Searching by email: " + email);
                 Optional<Customer> customerOpt = customerService.findByEmail(email.trim());
@@ -293,31 +307,30 @@ public class CustomerController {
                 } catch (IllegalArgumentException e) {
                     System.out.println("Invalid UUID format: " + id);
                     return ResponseEntity.badRequest()
-                        .body("ID không đúng định dạng UUID: " + id);
+                            .body("ID không đúng định dạng UUID: " + id);
                 }
             } else {
                 System.out.println("No search criteria provided");
                 return ResponseEntity.badRequest()
-                    .body("Vui lòng cung cấp ít nhất một tiêu chí tìm kiếm (email, username, hoặc id)");
+                        .body("Vui lòng cung cấp ít nhất một tiêu chí tìm kiếm (email, username, hoặc id)");
             }
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("customers", customers);
             response.put("count", customers.size());
             response.put("searchCriteria", Map.of(
-                "email", email != null ? email : "",
-                "username", username != null ? username : "",
-                "id", id != null ? id : ""
-            ));
-            
+                    "email", email != null ? email : "",
+                    "username", username != null ? username : "",
+                    "id", id != null ? id : ""));
+
             System.out.println("Search completed. Found " + customers.size() + " customers");
             return ResponseEntity.ok(response);
-            
+
         } catch (Exception e) {
             System.out.println("Error in search: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body("Lỗi tìm kiếm: " + e.getMessage());
+                    .body("Lỗi tìm kiếm: " + e.getMessage());
         }
     }
 
@@ -377,14 +390,14 @@ public class CustomerController {
             if (!customerService.existsById(customerId)) {
                 return ResponseEntity.notFound().build();
             }
-            
+
             Customer customer = customerService.findById(customerId).get();
             List<CustomerAddress> addresses = customerAddressService.findByCustomer(customer);
-            
+
             if (addresses.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
-            
+
             // Lấy địa chỉ mới nhất (giả sử có sắp xếp theo thời gian tạo)
             CustomerAddress latestAddress = addresses.get(0);
             for (CustomerAddress addr : addresses) {
@@ -394,7 +407,7 @@ public class CustomerController {
                     }
                 }
             }
-            
+
             return ResponseEntity.ok(latestAddress);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
@@ -434,23 +447,23 @@ public class CustomerController {
     // Xóa địa chỉ của khách hàng
     @DeleteMapping("/{customerId}/addresses/{addressId}")
     public ResponseEntity<?> deleteCustomerAddress(
-            @PathVariable UUID customerId, 
+            @PathVariable UUID customerId,
             @PathVariable UUID addressId) {
         try {
             if (!customerService.existsById(customerId)) {
                 return ResponseEntity.notFound().build();
             }
-            
+
             Optional<CustomerAddress> addressOpt = customerAddressService.findById(addressId);
             if (addressOpt.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
-            
+
             CustomerAddress address = addressOpt.get();
             if (!address.getCustomer().getId().equals(customerId)) {
                 return ResponseEntity.badRequest().body("Địa chỉ không thuộc về khách hàng này");
             }
-            
+
             customerAddressService.deleteById(addressId);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
@@ -525,19 +538,48 @@ public class CustomerController {
         private String lastName;
         private String email;
         private String phoneNumber;
-        
+
         // Getters and setters
-        public UUID getId() { return id; }
-        public void setId(UUID id) { this.id = id; }
-        public String getFirstName() { return firstName; }
-        public void setFirstName(String firstName) { this.firstName = firstName; }
-        public String getLastName() { return lastName; }
-        public void setLastName(String lastName) { this.lastName = lastName; }
-        public String getEmail() { return email; }
-        public void setEmail(String email) { this.email = email; }
-        public String getPhoneNumber() { return phoneNumber; }
-        public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
-        
+        public UUID getId() {
+            return id;
+        }
+
+        public void setId(UUID id) {
+            this.id = id;
+        }
+
+        public String getFirstName() {
+            return firstName;
+        }
+
+        public void setFirstName(String firstName) {
+            this.firstName = firstName;
+        }
+
+        public String getLastName() {
+            return lastName;
+        }
+
+        public void setLastName(String lastName) {
+            this.lastName = lastName;
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+
+        public String getPhoneNumber() {
+            return phoneNumber;
+        }
+
+        public void setPhoneNumber(String phoneNumber) {
+            this.phoneNumber = phoneNumber;
+        }
+
         public String getFullName() {
             return (firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "");
         }
@@ -548,7 +590,7 @@ public class CustomerController {
         private String recipient_name;
         private String address_line1; // Chỉ địa chỉ cụ thể (số nhà, đường)
         private String ward; // Phường/xã - THÊM MỚI
-        private String district; // Quận/huyện - THÊM MỚI  
+        private String district; // Quận/huyện - THÊM MỚI
         private String address_line2; // Ghi chú
         private String phone_number;
         private String dial_code;
@@ -557,26 +599,85 @@ public class CustomerController {
         private String city; // Tỉnh/thành phố
 
         // Getters and setters
-        public String getRecipient_name() { return recipient_name; }
-        public void setRecipient_name(String recipient_name) { this.recipient_name = recipient_name; }
-        public String getAddress_line1() { return address_line1; }
-        public void setAddress_line1(String address_line1) { this.address_line1 = address_line1; }
-        public String getWard() { return ward; }
-        public void setWard(String ward) { this.ward = ward; }
-        public String getDistrict() { return district; }
-        public void setDistrict(String district) { this.district = district; }
-        public String getAddress_line2() { return address_line2; }
-        public void setAddress_line2(String address_line2) { this.address_line2 = address_line2; }
-        public String getPhone_number() { return phone_number; }
-        public void setPhone_number(String phone_number) { this.phone_number = phone_number; }
-        public String getDial_code() { return dial_code; }
-        public void setDial_code(String dial_code) { this.dial_code = dial_code; }
-        public String getCountry() { return country; }
-        public void setCountry(String country) { this.country = country; }
-        public String getPostal_code() { return postal_code; }
-        public void setPostal_code(String postal_code) { this.postal_code = postal_code; }
-        public String getCity() { return city; }
-        public void setCity(String city) { this.city = city; }
+        public String getRecipient_name() {
+            return recipient_name;
+        }
+
+        public void setRecipient_name(String recipient_name) {
+            this.recipient_name = recipient_name;
+        }
+
+        public String getAddress_line1() {
+            return address_line1;
+        }
+
+        public void setAddress_line1(String address_line1) {
+            this.address_line1 = address_line1;
+        }
+
+        public String getWard() {
+            return ward;
+        }
+
+        public void setWard(String ward) {
+            this.ward = ward;
+        }
+
+        public String getDistrict() {
+            return district;
+        }
+
+        public void setDistrict(String district) {
+            this.district = district;
+        }
+
+        public String getAddress_line2() {
+            return address_line2;
+        }
+
+        public void setAddress_line2(String address_line2) {
+            this.address_line2 = address_line2;
+        }
+
+        public String getPhone_number() {
+            return phone_number;
+        }
+
+        public void setPhone_number(String phone_number) {
+            this.phone_number = phone_number;
+        }
+
+        public String getDial_code() {
+            return dial_code;
+        }
+
+        public void setDial_code(String dial_code) {
+            this.dial_code = dial_code;
+        }
+
+        public String getCountry() {
+            return country;
+        }
+
+        public void setCountry(String country) {
+            this.country = country;
+        }
+
+        public String getPostal_code() {
+            return postal_code;
+        }
+
+        public void setPostal_code(String postal_code) {
+            this.postal_code = postal_code;
+        }
+
+        public String getCity() {
+            return city;
+        }
+
+        public void setCity(String city) {
+            this.city = city;
+        }
 
         @Override
         public String toString() {
