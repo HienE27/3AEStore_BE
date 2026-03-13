@@ -1,20 +1,17 @@
 package com.nguyenviethien.exercise201.controller;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 import com.nguyenviethien.exercise201.DTO.CustomerPageResponse;
 import com.nguyenviethien.exercise201.entity.Customer;
 import com.nguyenviethien.exercise201.entity.CustomerAddress;
+import com.nguyenviethien.exercise201.exception.ApiResponse;
 import com.nguyenviethien.exercise201.repository.CustomerRepository;
 import com.nguyenviethien.exercise201.security.LoginRequest;
 import com.nguyenviethien.exercise201.service.CustomerAddressService;
@@ -39,28 +37,32 @@ import com.nguyenviethien.exercise201.service.JWT.JwtService;
 @RequestMapping("/api/customers")
 public class CustomerController {
 
-    @Autowired
-    @Qualifier("customerAuthManager")
-    private AuthenticationManager customerAuthManager;
+    private static final Logger log = LoggerFactory.getLogger(CustomerController.class);
+
+    private final AuthenticationManager customerAuthManager;
+    private final CustomerRepository customerRepository;
+    private final CustomerService customerService;
+    private final JwtService jwtService;
+    private final CustomerAddressService customerAddressService;
 
     @Autowired
-    private CustomerRepository customerRepository;
+    public CustomerController(
+            @Qualifier("customerAuthManager") AuthenticationManager customerAuthManager,
+            CustomerRepository customerRepository,
+            CustomerService customerService,
+            JwtService jwtService,
+            CustomerAddressService customerAddressService) {
+        this.customerAuthManager = customerAuthManager;
+        this.customerRepository = customerRepository;
+        this.customerService = customerService;
+        this.jwtService = jwtService;
+        this.customerAddressService = customerAddressService;
+    }
 
-    @Autowired
-    private CustomerService customerService;
-
-    @Autowired
-    private JwtService jwtService;
-
-    @Autowired
-    private CustomerAddressService customerAddressService;
-
-    // Lấy danh sách khách hàng có phân trang, trả về JSON
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<CustomerPageResponse> getAllCustomers(
+    public ResponseEntity<ApiResponse<CustomerPageResponse>> getAllCustomers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-
         Pageable pageable = PageRequest.of(page, size);
         Page<Customer> customerPage = customerService.findAll(pageable);
 
@@ -72,25 +74,24 @@ public class CustomerController {
                         customerPage.getTotalPages(),
                         customerPage.getNumber()));
 
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/test")
-    public String test() {
-        return "API OK";
+    public ResponseEntity<ApiResponse<String>> test() {
+        return ResponseEntity.ok(ApiResponse.success("API OK"));
     }
 
-    // Lấy khách hàng theo ID
     @GetMapping("/{id}")
-    public ResponseEntity<Customer> getCustomerById(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Customer>> getCustomerById(@PathVariable UUID id) {
         return customerService.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .map(customer -> ResponseEntity.ok(ApiResponse.success(customer)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiResponse.error("Không tìm thấy khách hàng")));
     }
 
-    // Lấy thông tin profile khách hàng cho checkout
     @GetMapping("/{customerId}/profile")
-    public ResponseEntity<CustomerProfileResponse> getCustomerProfile(@PathVariable UUID customerId) {
+    public ResponseEntity<ApiResponse<CustomerProfileResponse>> getCustomerProfile(@PathVariable UUID customerId) {
         try {
             Customer customer = customerRepository.findById(customerId)
                     .orElseThrow(() -> new RuntimeException("Customer not found"));
@@ -101,74 +102,61 @@ public class CustomerController {
             response.setLastName(customer.getLast_name());
             response.setEmail(customer.getEmail());
 
-            // Lấy số điện thoại từ địa chỉ mặc định hoặc địa chỉ mới nhất
             try {
                 List<CustomerAddress> addresses = customerAddressService.findByCustomer(customer);
                 String phoneNumber = "";
 
                 if (!addresses.isEmpty()) {
-                    // Tìm địa chỉ mặc định
                     CustomerAddress defaultAddress = addresses.stream()
                             .filter(addr -> addr.getIsDefault() != null && addr.getIsDefault())
                             .findFirst()
-                            .orElse(addresses.get(0)); // Nếu không có default, lấy địa chỉ đầu tiên
-
+                            .orElse(addresses.get(0));
                     phoneNumber = defaultAddress.getPhone_number();
                 }
-
                 response.setPhoneNumber(phoneNumber);
             } catch (Exception e) {
-                // Nếu có lỗi khi lấy address, để trống phone number
+                log.warn("Could not get phone number from addresses: {}", e.getMessage());
                 response.setPhoneNumber("");
-                System.out.println("Warning: Could not get phone number from addresses: " + e.getMessage());
             }
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(ApiResponse.success(response));
         } catch (Exception e) {
-            System.err.println("Error getting customer profile: " + e.getMessage());
-            return ResponseEntity.badRequest().build();
+            log.error("Error getting customer profile: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi khi lấy thông tin profile"));
         }
     }
 
-    // Lấy khách hàng theo email
     @GetMapping("/email/{email}")
-    public ResponseEntity<Customer> getCustomerByEmail(@PathVariable String email) {
+    public ResponseEntity<ApiResponse<Customer>> getCustomerByEmail(@PathVariable String email) {
         return customerService.findByEmail(email)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .map(customer -> ResponseEntity.ok(ApiResponse.success(customer)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiResponse.error("Không tìm thấy khách hàng")));
     }
 
-    // UPDATED: Tạo khách hàng mới với hỗ trợ ID cụ thể
     @PostMapping
-    public ResponseEntity<?> createCustomer(@RequestBody Customer customer) {
+    public ResponseEntity<ApiResponse<?>> createCustomer(@RequestBody Customer customer) {
         try {
-            System.out.println("=== CREATE CUSTOMER REQUEST ===");
-            System.out.println("Request data: " + customer.toString());
-            System.out.println("Customer ID: " + customer.getId());
-            System.out.println("Customer Email: " + customer.getEmail());
-            System.out.println("Customer Username: " + customer.getUser_name());
+            log.info("Creating customer with email: {}", customer.getEmail());
 
-            // Validation cơ bản
             if (customer.getEmail() == null || customer.getEmail().trim().isEmpty()) {
-                return ResponseEntity.badRequest().body("Email không được để trống");
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Email không được để trống"));
             }
 
-            // Kiểm tra email đã tồn tại chưa (kiểm tra trước để tránh conflict)
             if (customerService.existsByEmail(customer.getEmail())) {
                 return ResponseEntity.badRequest()
-                        .body("Email " + customer.getEmail() + " đã được sử dụng");
+                        .body(ApiResponse.error("Email " + customer.getEmail() + " đã được sử dụng"));
             }
 
-            // Không set ID thủ công - để JPA tự generate thông qua @GeneratedValue
-            // Nếu có ID từ request, xóa đi để tránh conflict với JPA ID generation
             if (customer.getId() != null) {
-                System.out.println("Warning: ID provided in request will be ignored. JPA will auto-generate ID.");
+                log.debug("ID provided in request will be ignored. JPA will auto-generate ID.");
                 customer.setId(null);
             }
 
-            // Thiết lập các giá trị mặc định nếu chưa có
             if (customer.getUser_name() == null || customer.getUser_name().trim().isEmpty()) {
-                customer.setUser_name(customer.getEmail()); // Dùng email làm username mặc định
+                customer.setUser_name(customer.getEmail());
             }
 
             if (customer.getFirst_name() == null || customer.getFirst_name().trim().isEmpty()) {
@@ -179,254 +167,180 @@ public class CustomerController {
                 customer.setLast_name("User");
             }
 
-            // Thiết lập password mặc định nếu chưa có (nên mã hóa)
             if (customer.getPassword_hash() == null || customer.getPassword_hash().trim().isEmpty()) {
-                customer.setPassword_hash("$2a$10$defaultpasswordhash"); // Placeholder - cần mã hóa thực tế
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Mật khẩu không được để trống"));
             }
 
-            System.out.println("Saving customer with final data:");
-            System.out.println("ID: " + customer.getId());
-            System.out.println("Email: " + customer.getEmail());
-            System.out.println("Username: " + customer.getUser_name());
-            System.out.println("Name: " + customer.getFirst_name() + " " + customer.getLast_name());
-
             Customer savedCustomer = customerService.save(customer);
-            System.out.println("Customer saved successfully with ID: " + savedCustomer.getId());
+            log.info("Customer saved successfully with ID: {}", savedCustomer.getId());
 
-            // Gửi mã kích hoạt sau khi tạo khách hàng thành công (optional)
             try {
                 if (customer.getEmail() != null && !customer.getEmail().trim().isEmpty()) {
                     customerService.sendActivationCode(savedCustomer.getEmail());
-                    System.out.println("Activation code sent to: " + savedCustomer.getEmail());
                 }
             } catch (Exception e) {
-                // Log error nhưng vẫn trả về success vì customer đã được tạo
-                System.out.println("Warning: Could not send activation code: " + e.getMessage());
+                log.warn("Could not send activation code: {}", e.getMessage());
             }
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Tạo customer thành công");
-            response.put("customer", savedCustomer);
+            return ResponseEntity.ok(ApiResponse.success("Tạo khách hàng thành công", savedCustomer));
 
-            return ResponseEntity.ok(response);
-
-        } catch (OptimisticLockingFailureException e) {
-            System.out.println("Optimistic locking failure: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body("Đã xảy ra lỗi đồng thời. Vui lòng thử lại sau vài giây.");
         } catch (DataIntegrityViolationException e) {
-            System.out.println("Data integrity violation: " + e.getMessage());
+            log.error("Data integrity violation: {}", e.getMessage());
             String errorMessage = e.getMessage();
             if (errorMessage != null && errorMessage.contains("email")) {
                 return ResponseEntity.badRequest()
-                        .body("Email " + customer.getEmail() + " đã được sử dụng");
+                        .body(ApiResponse.error("Email đã được sử dụng"));
             }
             return ResponseEntity.badRequest()
-                    .body("Dữ liệu không hợp lệ hoặc vi phạm ràng buộc: " + e.getMessage());
+                    .body(ApiResponse.error("Dữ liệu không hợp lệ"));
         } catch (IllegalArgumentException e) {
-            System.out.println("Validation error: " + e.getMessage());
+            log.warn("Validation error: {}", e.getMessage());
             return ResponseEntity.badRequest()
-                    .body(e.getMessage());
+                    .body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
-            System.out.println("Error creating customer: " + e.getMessage());
-            e.printStackTrace();
-            // Kiểm tra nếu là lỗi transaction/concurrency
-            String errorMessage = e.getMessage();
-            if (errorMessage != null && (errorMessage.contains("Row was updated") ||
-                    errorMessage.contains("transaction") ||
-                    errorMessage.contains("concurrent"))) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body("Đã xảy ra lỗi khi tạo tài khoản. Vui lòng thử lại sau vài giây.");
-            }
+            log.error("Error creating customer: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Lỗi khi tạo customer: " + e.getMessage());
+                    .body(ApiResponse.error("Lỗi khi tạo khách hàng"));
         }
     }
 
-    // NEW: Endpoint để kiểm tra customer tồn tại
     @GetMapping("/check/{id}")
-    public ResponseEntity<?> checkCustomerExists(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<?>> checkCustomerExists(@PathVariable UUID id) {
         boolean exists = customerService.existsById(id);
-        Map<String, Object> response = new HashMap<>();
-        response.put("exists", exists);
-        response.put("customerId", id.toString());
-
         if (exists) {
             Customer customer = customerService.findById(id).orElse(null);
-            response.put("customer", customer);
+            return ResponseEntity.ok(ApiResponse.success(customer));
         }
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success("exists", false));
     }
 
-    // NEW: Endpoint để tìm kiếm customer theo nhiều tiêu chí
     @GetMapping("/search")
-    public ResponseEntity<?> searchCustomers(
+    public ResponseEntity<ApiResponse<?>> searchCustomers(
             @RequestParam(required = false) String email,
             @RequestParam(required = false) String username,
             @RequestParam(required = false) String id) {
-
         try {
-            System.out.println("=== SEARCH CUSTOMERS ===");
-            System.out.println("Email: " + email);
-            System.out.println("Username: " + username);
-            System.out.println("ID: " + id);
-
             List<Customer> customers = new ArrayList<>();
 
             if (email != null && !email.trim().isEmpty()) {
-                System.out.println("Searching by email: " + email);
                 Optional<Customer> customerOpt = customerService.findByEmail(email.trim());
-                if (customerOpt.isPresent()) {
-                    customers.add(customerOpt.get());
-                    System.out.println("Found customer by email: " + customerOpt.get().getId());
-                } else {
-                    System.out.println("No customer found with email: " + email);
-                }
+                customerOpt.ifPresent(customers::add);
             } else if (username != null && !username.trim().isEmpty()) {
-                System.out.println("Searching by username: " + username);
                 Customer customer = customerRepository.findByUser_name(username.trim());
                 if (customer != null) {
                     customers.add(customer);
-                    System.out.println("Found customer by username: " + customer.getId());
-                } else {
-                    System.out.println("No customer found with username: " + username);
                 }
             } else if (id != null && !id.trim().isEmpty()) {
-                System.out.println("Searching by ID: " + id);
                 try {
                     UUID customerId = UUID.fromString(id.trim());
                     Optional<Customer> customerOpt = customerService.findById(customerId);
-                    if (customerOpt.isPresent()) {
-                        customers.add(customerOpt.get());
-                        System.out.println("Found customer by ID: " + customerOpt.get().getId());
-                    } else {
-                        System.out.println("No customer found with ID: " + id);
-                    }
+                    customerOpt.ifPresent(customers::add);
                 } catch (IllegalArgumentException e) {
-                    System.out.println("Invalid UUID format: " + id);
                     return ResponseEntity.badRequest()
-                            .body("ID không đúng định dạng UUID: " + id);
+                            .body(ApiResponse.error("ID không đúng định dạng UUID"));
                 }
             } else {
-                System.out.println("No search criteria provided");
                 return ResponseEntity.badRequest()
-                        .body("Vui lòng cung cấp ít nhất một tiêu chí tìm kiếm (email, username, hoặc id)");
+                        .body(ApiResponse.error("Vui lòng cung cấp ít nhất một tiêu chí tìm kiếm"));
             }
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("customers", customers);
-            response.put("count", customers.size());
-            response.put("searchCriteria", Map.of(
-                    "email", email != null ? email : "",
-                    "username", username != null ? username : "",
-                    "id", id != null ? id : ""));
-
-            System.out.println("Search completed. Found " + customers.size() + " customers");
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(ApiResponse.success(customers));
 
         } catch (Exception e) {
-            System.out.println("Error in search: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error in search: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Lỗi tìm kiếm: " + e.getMessage());
+                    .body(ApiResponse.error("Lỗi tìm kiếm"));
         }
     }
 
-    // Cập nhật khách hàng
     @PutMapping("/{id}")
-    public ResponseEntity<Customer> updateCustomerDetails(@PathVariable UUID id, @RequestBody Customer customer) {
+    public ResponseEntity<ApiResponse<Customer>> updateCustomerDetails(@PathVariable UUID id, @RequestBody Customer customer) {
         try {
             Customer updated = customerService.update(id, customer);
-            return ResponseEntity.ok(updated);
+            return ResponseEntity.ok(ApiResponse.success(updated));
         } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.notFound()
+                    .body(ApiResponse.error("Không tìm thấy khách hàng"));
         }
     }
 
-    // Upload avatar - lưu trực tiếp URL
     @PostMapping("/{id}/avatar")
-    public ResponseEntity<?> uploadAvatar(@PathVariable UUID id, @RequestBody Map<String, String> request) {
+    public ResponseEntity<ApiResponse<?>> uploadAvatar(@PathVariable UUID id, @RequestBody java.util.Map<String, String> request) {
         try {
             if (!customerService.existsById(id)) {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.notFound()
+                        .body(ApiResponse.error("Không tìm thấy khách hàng"));
             }
-            
+
             String avatarUrl = request.get("avatarUrl");
             if (avatarUrl == null || avatarUrl.isEmpty()) {
-                return ResponseEntity.badRequest().body("Vui lòng cung cấp URL ảnh");
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Vui lòng cung cấp URL ảnh"));
             }
-            
-            // Cập nhật avatar
+
             customerService.updateAvatar(id, avatarUrl);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("avatarUrl", avatarUrl);
-            
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(ApiResponse.success("Cập nhật avatar thành công", avatarUrl));
+
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error uploading avatar: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Lỗi khi cập nhật ảnh đại diện: " + e.getMessage());
+                    .body(ApiResponse.error("Lỗi khi cập nhật ảnh đại diện"));
         }
     }
 
-    // Xóa khách hàng
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteCustomer(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<?>> deleteCustomer(@PathVariable UUID id) {
         if (!customerService.existsById(id)) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.notFound()
+                    .body(ApiResponse.error("Không tìm thấy khách hàng"));
         }
         try {
             customerService.deleteById(id);
-            return ResponseEntity.ok().build();
+            return ResponseEntity.ok(ApiResponse.success("Xóa khách hàng thành công"));
         } catch (DataIntegrityViolationException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body("Không thể xóa khách hàng do ràng buộc dữ liệu.");
+                    .body(ApiResponse.error("Không thể xóa khách hàng do ràng buộc dữ liệu"));
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error deleting customer: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Lỗi máy chủ khi xóa khách hàng.");
+                    .body(ApiResponse.error("Lỗi máy chủ khi xóa khách hàng"));
         }
     }
 
-    // =========================
-    // CUSTOMER ADDRESS ENDPOINTS - CẬP NHẬT
-    // =========================
-
-    // Lấy tất cả địa chỉ của khách hàng
     @GetMapping("/{id}/addresses")
-    public ResponseEntity<List<CustomerAddress>> getCustomerAddresses(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<List<CustomerAddress>>> getCustomerAddresses(@PathVariable UUID id) {
         try {
             if (!customerService.existsById(id)) {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.notFound()
+                        .body(ApiResponse.error("Không tìm thấy khách hàng"));
             }
             Customer customer = customerService.findById(id).get();
             List<CustomerAddress> addresses = customerAddressService.findByCustomer(customer);
-            return ResponseEntity.ok(addresses);
+            return ResponseEntity.ok(ApiResponse.success(addresses));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+            log.error("Error getting addresses: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi khi lấy danh sách địa chỉ"));
         }
     }
 
-    // Lấy địa chỉ mới nhất của khách hàng
     @GetMapping("/{customerId}/addresses/latest")
-    public ResponseEntity<CustomerAddress> getLatestCustomerAddress(@PathVariable UUID customerId) {
+    public ResponseEntity<ApiResponse<CustomerAddress>> getLatestCustomerAddress(@PathVariable UUID customerId) {
         try {
             if (!customerService.existsById(customerId)) {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.notFound()
+                        .body(ApiResponse.error("Không tìm thấy khách hàng"));
             }
 
             Customer customer = customerService.findById(customerId).get();
             List<CustomerAddress> addresses = customerAddressService.findByCustomer(customer);
 
             if (addresses.isEmpty()) {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.notFound()
+                        .body(ApiResponse.error("Không tìm thấy địa chỉ"));
             }
 
-            // Lấy địa chỉ mới nhất (giả sử có sắp xếp theo thời gian tạo)
             CustomerAddress latestAddress = addresses.get(0);
             for (CustomerAddress addr : addresses) {
                 if (addr.getCreatedAt() != null && latestAddress.getCreatedAt() != null) {
@@ -436,15 +350,16 @@ public class CustomerController {
                 }
             }
 
-            return ResponseEntity.ok(latestAddress);
+            return ResponseEntity.ok(ApiResponse.success(latestAddress));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+            log.error("Error getting latest address: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi khi lấy địa chỉ"));
         }
     }
 
-    // CẬP NHẬT: Thêm địa chỉ mới cho khách hàng với cấu trúc mới
     @PostMapping("/{id}/addresses")
-    public ResponseEntity<CustomerAddress> addCustomerAddress(
+    public ResponseEntity<ApiResponse<CustomerAddress>> addCustomerAddress(
             @PathVariable UUID id,
             @RequestBody SaveAddressRequest request) {
         try {
@@ -454,58 +369,58 @@ public class CustomerController {
             CustomerAddress address = new CustomerAddress();
             address.setCustomer(customer);
             address.setRecipient_name(request.getRecipient_name());
-            address.setAddress_line1(request.getAddress_line1()); // Chỉ địa chỉ cụ thể
-            address.setWard(request.getWard()); // Phường/xã riêng biệt
-            address.setDistrict(request.getDistrict()); // Quận/huyện riêng biệt
-            address.setAddress_line2(request.getAddress_line2()); // Ghi chú
+            address.setAddress_line1(request.getAddress_line1());
+            address.setWard(request.getWard());
+            address.setDistrict(request.getDistrict());
+            address.setAddress_line2(request.getAddress_line2());
             address.setPhone_number(request.getPhone_number());
             address.setDial_code(request.getDial_code() != null ? request.getDial_code() : "+84");
             address.setCountry(request.getCountry() != null ? request.getCountry() : "Vietnam");
             address.setPostal_code(request.getPostal_code() != null ? request.getPostal_code() : "00000");
-            address.setCity(request.getCity()); // Tỉnh/thành phố
+            address.setCity(request.getCity());
 
             CustomerAddress savedAddress = customerAddressService.save(address);
-            return ResponseEntity.ok(savedAddress);
+            return ResponseEntity.ok(ApiResponse.success(savedAddress));
         } catch (Exception e) {
-            System.err.println("Error adding customer address: " + e.getMessage());
-            return ResponseEntity.badRequest().build();
+            log.error("Error adding customer address: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi khi thêm địa chỉ"));
         }
     }
 
-    // Xóa địa chỉ của khách hàng
     @DeleteMapping("/{customerId}/addresses/{addressId}")
-    public ResponseEntity<?> deleteCustomerAddress(
+    public ResponseEntity<ApiResponse<?>> deleteCustomerAddress(
             @PathVariable UUID customerId,
             @PathVariable UUID addressId) {
         try {
             if (!customerService.existsById(customerId)) {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.notFound()
+                        .body(ApiResponse.error("Không tìm thấy khách hàng"));
             }
 
             Optional<CustomerAddress> addressOpt = customerAddressService.findById(addressId);
             if (addressOpt.isEmpty()) {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.notFound()
+                        .body(ApiResponse.error("Không tìm thấy địa chỉ"));
             }
 
             CustomerAddress address = addressOpt.get();
             if (!address.getCustomer().getId().equals(customerId)) {
-                return ResponseEntity.badRequest().body("Địa chỉ không thuộc về khách hàng này");
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Địa chỉ không thuộc về khách hàng này"));
             }
 
             customerAddressService.deleteById(addressId);
-            return ResponseEntity.ok().build();
+            return ResponseEntity.ok(ApiResponse.success("Xóa địa chỉ thành công"));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+            log.error("Error deleting address: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Lỗi khi xóa địa chỉ"));
         }
     }
 
-    // =========================
-    // AUTHENTICATION ENDPOINTS
-    // =========================
-
-    // Đăng nhập khách hàng, trả về token JWT
     @PostMapping("/login")
-    public ResponseEntity<?> loginCustomer(@RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<ApiResponse<?>> loginCustomer(@RequestBody LoginRequest loginRequest) {
         try {
             Authentication authentication = customerAuthManager.authenticate(
                     new UsernamePasswordAuthenticationToken(loginRequest.getUser_name(),
@@ -515,51 +430,48 @@ public class CustomerController {
 
             Customer customer = customerRepository.findByUser_name(loginRequest.getUser_name());
             if (customer == null) {
-                return ResponseEntity.badRequest().body("Không tìm thấy thông tin khách hàng.");
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Không tìm thấy thông tin khách hàng"));
             }
 
             String jwtToken = jwtService.generateTokenForCustomer(customer.getUser_name());
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("token", jwtToken);
-            response.put("id", customer.getId().toString());
-            response.put("user_name", customer.getUser_name());
-            response.put("email", customer.getEmail());
-            response.put("message", "Đăng nhập khách hàng thành công");
+            return ResponseEntity.ok(ApiResponse.success("Đăng nhập thành công", java.util.Map.of(
+                    "token", jwtToken,
+                    "id", customer.getId().toString(),
+                    "user_name", customer.getUser_name(),
+                    "email", customer.getEmail())));
 
-            return ResponseEntity.ok(response);
         } catch (AuthenticationException e) {
-            return ResponseEntity.badRequest().body("Tên đăng nhập hoặc mật khẩu sai (khách hàng)");
+            log.warn("Login failed for user: {}", loginRequest.getUser_name());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Tên đăng nhập hoặc mật khẩu sai"));
         }
     }
 
-    // Gửi mã kích hoạt qua email cho khách hàng
     @PostMapping("/send-activation-code")
-    public ResponseEntity<?> sendActivationCode(@RequestParam String email) {
+    public ResponseEntity<ApiResponse<?>> sendActivationCode(@RequestParam String email) {
         try {
             customerService.sendActivationCode(email);
-            return ResponseEntity.ok("Mã kích hoạt đã được gửi đến email.");
+            return ResponseEntity.ok(ApiResponse.success("Mã kích hoạt đã được gửi đến email"));
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body("Không tìm thấy email hoặc lỗi khi gửi mã kích hoạt.");
+            log.warn("Failed to send activation code: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Không tìm thấy email hoặc lỗi khi gửi mã kích hoạt"));
         }
     }
 
-    // Kích hoạt tài khoản khách hàng bằng email và mã kích hoạt
     @GetMapping("/activate")
-    public ResponseEntity<?> activateCustomer(@RequestParam String email, @RequestParam String code) {
+    public ResponseEntity<ApiResponse<?>> activateCustomer(@RequestParam String email, @RequestParam String code) {
         boolean activated = customerService.activateAccount(email, code);
         if (activated) {
-            return ResponseEntity.ok("Kích hoạt tài khoản thành công.");
+            return ResponseEntity.ok(ApiResponse.success("Kích hoạt tài khoản thành công"));
         } else {
-            return ResponseEntity.badRequest().body("Mã kích hoạt không hợp lệ hoặc đã hết hạn.");
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Mã kích hoạt không hợp lệ hoặc đã hết hạn"));
         }
     }
 
-    // =========================
-    // DTO CLASSES - CẬP NHẬT
-    // =========================
-
-    // DTO cho thông tin profile khách hàng
     public static class CustomerProfileResponse {
         private UUID id;
         private String firstName;
@@ -567,160 +479,50 @@ public class CustomerController {
         private String email;
         private String phoneNumber;
 
-        // Getters and setters
-        public UUID getId() {
-            return id;
-        }
-
-        public void setId(UUID id) {
-            this.id = id;
-        }
-
-        public String getFirstName() {
-            return firstName;
-        }
-
-        public void setFirstName(String firstName) {
-            this.firstName = firstName;
-        }
-
-        public String getLastName() {
-            return lastName;
-        }
-
-        public void setLastName(String lastName) {
-            this.lastName = lastName;
-        }
-
-        public String getEmail() {
-            return email;
-        }
-
-        public void setEmail(String email) {
-            this.email = email;
-        }
-
-        public String getPhoneNumber() {
-            return phoneNumber;
-        }
-
-        public void setPhoneNumber(String phoneNumber) {
-            this.phoneNumber = phoneNumber;
-        }
-
-        public String getFullName() {
-            return (firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "");
-        }
+        public UUID getId() { return id; }
+        public void setId(UUID id) { this.id = id; }
+        public String getFirstName() { return firstName; }
+        public void setFirstName(String firstName) { this.firstName = firstName; }
+        public String getLastName() { return lastName; }
+        public void setLastName(String lastName) { this.lastName = lastName; }
+        public String getEmail() { return email; }
+        public void setEmail(String email) { this.email = email; }
+        public String getPhoneNumber() { return phoneNumber; }
+        public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
+        public String getFullName() { return (firstName != null ? firstName : "") + " " + (lastName != null ? lastName : ""); }
     }
 
-    // CẬP NHẬT: DTO cho việc lưu địa chỉ với cấu trúc mới
     public static class SaveAddressRequest {
         private String recipient_name;
-        private String address_line1; // Chỉ địa chỉ cụ thể (số nhà, đường)
-        private String ward; // Phường/xã - THÊM MỚI
-        private String district; // Quận/huyện - THÊM MỚI
-        private String address_line2; // Ghi chú
+        private String address_line1;
+        private String ward;
+        private String district;
+        private String address_line2;
         private String phone_number;
         private String dial_code;
         private String country;
         private String postal_code;
-        private String city; // Tỉnh/thành phố
+        private String city;
 
-        // Getters and setters
-        public String getRecipient_name() {
-            return recipient_name;
-        }
-
-        public void setRecipient_name(String recipient_name) {
-            this.recipient_name = recipient_name;
-        }
-
-        public String getAddress_line1() {
-            return address_line1;
-        }
-
-        public void setAddress_line1(String address_line1) {
-            this.address_line1 = address_line1;
-        }
-
-        public String getWard() {
-            return ward;
-        }
-
-        public void setWard(String ward) {
-            this.ward = ward;
-        }
-
-        public String getDistrict() {
-            return district;
-        }
-
-        public void setDistrict(String district) {
-            this.district = district;
-        }
-
-        public String getAddress_line2() {
-            return address_line2;
-        }
-
-        public void setAddress_line2(String address_line2) {
-            this.address_line2 = address_line2;
-        }
-
-        public String getPhone_number() {
-            return phone_number;
-        }
-
-        public void setPhone_number(String phone_number) {
-            this.phone_number = phone_number;
-        }
-
-        public String getDial_code() {
-            return dial_code;
-        }
-
-        public void setDial_code(String dial_code) {
-            this.dial_code = dial_code;
-        }
-
-        public String getCountry() {
-            return country;
-        }
-
-        public void setCountry(String country) {
-            this.country = country;
-        }
-
-        public String getPostal_code() {
-            return postal_code;
-        }
-
-        public void setPostal_code(String postal_code) {
-            this.postal_code = postal_code;
-        }
-
-        public String getCity() {
-            return city;
-        }
-
-        public void setCity(String city) {
-            this.city = city;
-        }
-
-        @Override
-        public String toString() {
-            return "SaveAddressRequest{" +
-                    "recipient_name='" + recipient_name + '\'' +
-                    ", address_line1='" + address_line1 + '\'' +
-                    ", ward='" + ward + '\'' +
-                    ", district='" + district + '\'' +
-                    ", address_line2='" + address_line2 + '\'' +
-                    ", phone_number='" + phone_number + '\'' +
-                    ", dial_code='" + dial_code + '\'' +
-                    ", country='" + country + '\'' +
-                    ", postal_code='" + postal_code + '\'' +
-                    ", city='" + city + '\'' +
-                    '}';
-        }
+        public String getRecipient_name() { return recipient_name; }
+        public void setRecipient_name(String recipient_name) { this.recipient_name = recipient_name; }
+        public String getAddress_line1() { return address_line1; }
+        public void setAddress_line1(String address_line1) { this.address_line1 = address_line1; }
+        public String getWard() { return ward; }
+        public void setWard(String ward) { this.ward = ward; }
+        public String getDistrict() { return district; }
+        public void setDistrict(String district) { this.district = district; }
+        public String getAddress_line2() { return address_line2; }
+        public void setAddress_line2(String address_line2) { this.address_line2 = address_line2; }
+        public String getPhone_number() { return phone_number; }
+        public void setPhone_number(String phone_number) { this.phone_number = phone_number; }
+        public String getDial_code() { return dial_code; }
+        public void setDial_code(String dial_code) { this.dial_code = dial_code; }
+        public String getCountry() { return country; }
+        public void setCountry(String country) { this.country = country; }
+        public String getPostal_code() { return postal_code; }
+        public void setPostal_code(String postal_code) { this.postal_code = postal_code; }
+        public String getCity() { return city; }
+        public void setCity(String city) { this.city = city; }
     }
 }

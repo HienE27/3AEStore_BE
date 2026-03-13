@@ -1,12 +1,13 @@
 package com.nguyenviethien.exercise201.controller;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.Map;
-import java.util.HashMap;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.nguyenviethien.exercise201.DTO.ProductDetailsDTO;
 import com.nguyenviethien.exercise201.entity.Product;
+import com.nguyenviethien.exercise201.exception.ApiResponse;
 import com.nguyenviethien.exercise201.service.ProductService;
 import com.nguyenviethien.exercise201.service.AIGenerateDescriptionService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,56 +27,29 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @RequestMapping("/api/products")
 public class ProductController {
 
-    @Autowired
-    private ProductService productService;
+    private static final Logger log = LoggerFactory.getLogger(ProductController.class);
+
+    private final ProductService productService;
+    private final ObjectMapper objectMapper;
+    private final AIGenerateDescriptionService aiGenerateDescriptionService;
 
     @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
-    private AIGenerateDescriptionService aiGenerateDescriptionService;
+    public ProductController(
+            ProductService productService,
+            ObjectMapper objectMapper,
+            AIGenerateDescriptionService aiGenerateDescriptionService) {
+        this.productService = productService;
+        this.objectMapper = objectMapper;
+        this.aiGenerateDescriptionService = aiGenerateDescriptionService;
+    }
 
     @GetMapping
-    public ResponseEntity<?> getAllProducts(
+    public ResponseEntity<ApiResponse<List<Product>>> getAllProducts(
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
-        // #region agent log
         try {
-            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_10\",\"timestamp\":" + System.currentTimeMillis()
-                    + ",\"location\":\"ProductController.java:38\",\"message\":\"getAllProducts entry\",\"data\":{\"page\":\""
-                    + page + "\",\"size\":\"" + size
-                    + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}\n");
-            fw.close();
-        } catch (java.io.IOException ex) {
-        }
-        // #endregion
-        try {
-            // #region agent log
-            try {
-                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_11\",\"timestamp\":"
-                        + System.currentTimeMillis()
-                        + ",\"location\":\"ProductController.java:42\",\"message\":\"Before calling productService.getAllProducts\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
-                fw.close();
-            } catch (java.io.IOException ex) {
-            }
-            // #endregion
             List<Product> products = productService.getAllProducts();
-            // #region agent log
-            try {
-                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_12\",\"timestamp\":"
-                        + System.currentTimeMillis()
-                        + ",\"location\":\"ProductController.java:44\",\"message\":\"After calling productService.getAllProducts\",\"data\":{\"productCount\":\""
-                        + (products != null ? products.size() : 0)
-                        + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
-                fw.close();
-            } catch (java.io.IOException ex) {
-            }
-            // #endregion
 
-            // Nếu có pagination parameters, format response theo Spring Data REST format
             if (page != null && size != null) {
                 int totalElements = products.size();
                 int totalPages = (int) Math.ceil((double) totalElements / size);
@@ -82,299 +57,207 @@ public class ProductController {
                 int end = Math.min(start + size, totalElements);
                 List<Product> pagedProducts = start < totalElements ? products.subList(start, end) : List.of();
 
-                Map<String, Object> response = new HashMap<>();
-                Map<String, Object> embedded = new HashMap<>();
-                embedded.put("products", pagedProducts);
-                response.put("_embedded", embedded);
-
-                Map<String, Object> pageInfo = new HashMap<>();
-                pageInfo.put("size", size);
-                pageInfo.put("totalElements", totalElements);
-                pageInfo.put("totalPages", totalPages);
-                pageInfo.put("number", page);
-                response.put("page", pageInfo);
-
-                return ResponseEntity.ok(response);
+                return ResponseEntity.ok(ApiResponse.<List<Product>>builder()
+                        .success(true)
+                        .data(pagedProducts)
+                        .message("Page " + page + " of " + totalPages)
+                        .build());
             }
 
-            // Nếu không có pagination, trả về list đơn giản
-            // #region agent log
-            try {
-                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_13\",\"timestamp\":"
-                        + System.currentTimeMillis()
-                        + ",\"location\":\"ProductController.java:68\",\"message\":\"Before returning response\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\"}\n");
-                fw.close();
-            } catch (java.io.IOException ex) {
-            }
-            // #endregion
-            return ResponseEntity.ok(products);
+            return ResponseEntity.ok(ApiResponse.success(products));
         } catch (Exception e) {
-            // #region agent log
-            try {
-                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_14\",\"timestamp\":"
-                        + System.currentTimeMillis()
-                        + ",\"location\":\"ProductController.java:70\",\"message\":\"Exception in getAllProducts\",\"data\":{\"error\":\""
-                        + e.getClass().getName() + "\",\"message\":\"" + e.getMessage().replace("\"", "'")
-                        + "\",\"stackTrace\":\""
-                        + java.util.Arrays.toString(e.getStackTrace()).replace("\"", "'").substring(0,
-                                Math.min(500, java.util.Arrays.toString(e.getStackTrace()).replace("\"", "'").length()))
-                        + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}\n");
-                fw.close();
-            } catch (java.io.IOException ex) {
-            }
-            // #endregion
-            System.err.println("💥 Error getting all products: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("Error getting all products: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Lỗi khi lấy danh sách sản phẩm"));
         }
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Product> getProductById(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Product>> getProductById(@PathVariable UUID id) {
         try {
             Optional<Product> product = productService.getProductByIdWithCategories(id);
-            return product.map(ResponseEntity::ok)
-                    .orElseGet(() -> ResponseEntity.notFound().build());
+            return product.map(p -> ResponseEntity.ok(ApiResponse.success(p)))
+                    .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                            .body(ApiResponse.error("Không tìm thấy sản phẩm")));
         } catch (Exception e) {
-            System.err.println("💥 Error getting product by ID: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("Error getting product by ID: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Lỗi khi lấy thông tin sản phẩm"));
         }
     }
 
-    // ✅ SỬA ĐỔI: Better JSON handling và validation
     @PostMapping
-    public ResponseEntity<?> createProduct(@RequestBody Map<String, Object> productData, @RequestParam UUID staffId) {
+    public ResponseEntity<ApiResponse<?>> createProduct(@RequestBody JsonNode productJson, @RequestParam UUID staffId) {
         try {
-            System.out.println("🚀 =================================");
-            System.out.println("📥 Received product creation request");
-            System.out.println("👤 Staff ID: " + staffId);
-            System.out.println("📦 Product data: " + productData);
-            System.out.println("🚀 =================================");
+            log.info("Creating product with staffId: {}", staffId);
 
-            // Validate staffId
             if (staffId == null) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "Staff ID không được để trống");
-                return ResponseEntity.badRequest().body(error);
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Staff ID không được để trống"));
             }
 
-            // Validate productData
-            if (productData == null || productData.isEmpty()) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "Dữ liệu sản phẩm không được để trống");
-                return ResponseEntity.badRequest().body(error);
+            if (productJson == null || productJson.isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Dữ liệu sản phẩm không được để trống"));
             }
 
-            // Validate required fields (slug và sku sẽ được auto-generate nếu không cung cấp)
-            String[] requiredFields = { "productName" };
-            for (String field : requiredFields) {
-                if (!productData.containsKey(field) ||
-                        productData.get(field) == null ||
-                        productData.get(field).toString().trim().isEmpty()) {
-                    Map<String, String> error = new HashMap<>();
-                    error.put("error", "Trường " + field + " không được để trống");
-                    return ResponseEntity.badRequest().body(error);
-                }
+            if (!productJson.has("productName") || productJson.get("productName").asText().trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Tên sản phẩm không được để trống"));
             }
 
-            // Convert Map to JsonNode
-            JsonNode jsonData = objectMapper.valueToTree(productData);
-
-            System.out.println("🔄 Converted to JsonNode: " + jsonData.toString());
-
-            // Call service
-            ResponseEntity<?> result = productService.save(jsonData, staffId);
-
-            System.out.println("✅ Service call completed with status: " + result.getStatusCode());
-
+            ResponseEntity<?> result = productService.save(productJson, staffId);
             return result;
 
         } catch (IllegalArgumentException e) {
-            System.err.println("❌ Validation error: " + e.getMessage());
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-
+            log.warn("Validation error creating product: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
-            System.err.println("💥 Unexpected error creating product: " + e.getMessage());
-            e.printStackTrace();
-
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Có lỗi xảy ra khi tạo sản phẩm: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+            log.error("Error creating product: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Có lỗi xảy ra khi tạo sản phẩm"));
         }
     }
 
-    // ✅ THÊM: Alternative endpoint with different mapping
     @PostMapping("/create")
-    public ResponseEntity<?> createProductAlternative(@RequestBody JsonNode jsonData, @RequestParam UUID staffId) {
+    public ResponseEntity<ApiResponse<?>> createProductAlternative(@RequestBody JsonNode jsonData, @RequestParam UUID staffId) {
         try {
-            System.out.println("🚀 Alternative endpoint called");
-            System.out.println("👤 Staff ID: " + staffId);
-            System.out.println("📦 JSON data: " + jsonData.toString());
+            log.debug("Alternative create endpoint called with staffId: {}", staffId);
 
             if (staffId == null) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "Staff ID không được để trống");
-                return ResponseEntity.badRequest().body(error);
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Staff ID không được để trống"));
             }
 
             if (jsonData == null || jsonData.isEmpty()) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "Dữ liệu sản phẩm không được để trống");
-                return ResponseEntity.badRequest().body(error);
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Dữ liệu sản phẩm không được để trống"));
             }
 
             return productService.save(jsonData, staffId);
 
         } catch (Exception e) {
-            System.err.println("💥 Error in alternative endpoint: " + e.getMessage());
-            e.printStackTrace();
-
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Có lỗi xảy ra: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+            log.error("Error in alternative create endpoint: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Có lỗi xảy ra"));
         }
     }
 
     @PutMapping("/{productId}")
-    public ResponseEntity<?> updateProduct(
+    public ResponseEntity<ApiResponse<?>> updateProduct(
             @PathVariable UUID productId,
             @RequestParam("staffId") UUID staffId,
             @RequestBody JsonNode productJson) {
         try {
+            log.info("Updating product ID: {} by staff: {}", productId, staffId);
+
             if (productId == null) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "Product ID không hợp lệ");
-                return ResponseEntity.badRequest().body(error);
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Product ID không hợp lệ"));
             }
 
             if (staffId == null) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "Staff ID không được để trống");
-                return ResponseEntity.badRequest().body(error);
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Staff ID không được để trống"));
             }
-
-            System.out.println("🔄 Updating product ID: " + productId + " by staff: " + staffId);
 
             return productService.update(productId, productJson, staffId);
 
         } catch (Exception e) {
-            System.err.println("💥 Error updating product: " + e.getMessage());
-            e.printStackTrace();
-
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Có lỗi xảy ra khi cập nhật sản phẩm: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+            log.error("Error updating product: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Có lỗi xảy ra khi cập nhật sản phẩm"));
         }
     }
 
     @DeleteMapping("/{productId}")
-    public ResponseEntity<?> deleteProduct(@PathVariable UUID productId) {
+    public ResponseEntity<ApiResponse<?>> deleteProduct(@PathVariable UUID productId) {
         try {
-            if (productId == null) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "Product ID không hợp lệ");
-                return ResponseEntity.badRequest().body(error);
-            }
+            log.info("Deleting product ID: {}", productId);
 
-            System.out.println("🗑️ Deleting product ID: " + productId);
+            if (productId == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Product ID không hợp lệ"));
+            }
 
             return productService.deleteProduct(productId);
 
         } catch (Exception e) {
-            System.err.println("💥 Error deleting product: " + e.getMessage());
-            e.printStackTrace();
-
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Có lỗi xảy ra khi xóa sản phẩm: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+            log.error("Error deleting product: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Có lỗi xảy ra khi xóa sản phẩm"));
         }
     }
 
     @GetMapping("/products/{productId}")
-    public ResponseEntity<ProductDetailsDTO> getProductDetails(@PathVariable UUID productId) {
+    public ResponseEntity<ApiResponse<ProductDetailsDTO>> getProductDetails(@PathVariable UUID productId) {
         try {
             if (productId == null) {
-                return ResponseEntity.badRequest().build();
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Product ID không hợp lệ"));
             }
 
             ProductDetailsDTO productDTO = productService.getProductDetails(productId);
             if (productDTO == null) {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiResponse.error("Không tìm thấy sản phẩm"));
             }
 
-            return ResponseEntity.ok(productDTO);
+            return ResponseEntity.ok(ApiResponse.success(productDTO));
 
         } catch (Exception e) {
-            System.err.println("💥 Error getting product details: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("Error getting product details: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Lỗi khi lấy chi tiết sản phẩm"));
         }
     }
 
     @GetMapping("/by-category/{categoryId}")
-    public ResponseEntity<List<Product>> getProductsByCategory(@PathVariable UUID categoryId) {
+    public ResponseEntity<ApiResponse<List<Product>>> getProductsByCategory(@PathVariable UUID categoryId) {
         try {
             if (categoryId == null) {
-                return ResponseEntity.badRequest().build();
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Category ID không hợp lệ"));
             }
 
             List<Product> products = productService.getProductsByCategoryId(categoryId);
-            return ResponseEntity.ok(products);
+            return ResponseEntity.ok(ApiResponse.success(products));
 
         } catch (Exception e) {
-            System.err.println("💥 Error getting products by category: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("Error getting products by category: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Lỗi khi lấy sản phẩm theo danh mục"));
         }
     }
 
-    // Endpoint để đếm số sách theo danh mục
     @GetMapping("/count")
-    public ResponseEntity<?> countProductsByCategory(@RequestParam(required = false) String categoryId) {
+    public ResponseEntity<ApiResponse<?>> countProductsByCategory(@RequestParam(required = false) String categoryId) {
         try {
-            Map<String, Object> response = new HashMap<>();
-
+            Long count;
             if (categoryId != null && !categoryId.isEmpty()) {
-                // Đếm sách theo 1 danh mục cụ thể
                 UUID catId = UUID.fromString(categoryId);
-                Long count = productService.countByCategoryId(catId);
-                response.put("count", count);
-
-                Map<String, Object> pageInfo = new HashMap<>();
-                pageInfo.put("totalElements", count);
-                response.put("page", pageInfo);
+                count = productService.countByCategoryId(catId);
             } else {
-                // Đếm tổng sách
-                Long totalCount = productService.countAllProducts();
-                response.put("count", totalCount);
-
-                Map<String, Object> pageInfo = new HashMap<>();
-                pageInfo.put("totalElements", totalCount);
-                response.put("page", pageInfo);
+                count = productService.countAllProducts();
             }
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(ApiResponse.success("count", count));
+
         } catch (Exception e) {
-            System.err.println("💥 Error counting products: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("Error counting products: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Lỗi khi đếm sản phẩm"));
         }
     }
 
-    // Endpoint để lấy sản phẩm có giá sale > 0
     @GetMapping("/search/salePriceGreaterThanZero")
-    public ResponseEntity<?> getProductsWithSalePrice(
+    public ResponseEntity<ApiResponse<?>> getProductsWithSalePrice(
             @RequestParam(defaultValue = "0") Integer page,
             @RequestParam(defaultValue = "12") Integer size) {
         try {
             List<Product> allProducts = productService.getAllProducts();
             List<Product> saleProducts = allProducts.stream()
-                    .filter(p -> p.getSalePrice() != null && p.getSalePrice().compareTo(java.math.BigDecimal.ZERO) > 0)
+                    .filter(p -> p.getSalePrice() != null && p.getSalePrice().compareTo(BigDecimal.ZERO) > 0)
                     .collect(Collectors.toList());
 
             int totalElements = saleProducts.size();
@@ -383,29 +266,21 @@ public class ProductController {
             int end = Math.min(start + size, totalElements);
             List<Product> pagedProducts = start < totalElements ? saleProducts.subList(start, end) : List.of();
 
-            Map<String, Object> response = new HashMap<>();
-            Map<String, Object> embedded = new HashMap<>();
-            embedded.put("products", pagedProducts);
-            response.put("_embedded", embedded);
+            return ResponseEntity.ok(ApiResponse.<List<Product>>builder()
+                    .success(true)
+                    .data(pagedProducts)
+                    .message("Page " + page + " of " + totalPages)
+                    .build());
 
-            Map<String, Object> pageInfo = new HashMap<>();
-            pageInfo.put("size", size);
-            pageInfo.put("totalElements", totalElements);
-            pageInfo.put("totalPages", totalPages);
-            pageInfo.put("number", page);
-            response.put("page", pageInfo);
-
-            return ResponseEntity.ok(response);
         } catch (Exception e) {
-            System.err.println("💥 Error getting products with sale price: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("Error getting products with sale price: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Lỗi khi tìm kiếm sản phẩm"));
         }
     }
 
-    // Endpoint để tìm kiếm sản phẩm theo tên
     @GetMapping("/search/findByProductNameContaining")
-    public ResponseEntity<?> searchProductsByName(
+    public ResponseEntity<ApiResponse<?>> searchProductsByName(
             @RequestParam String productName,
             @RequestParam(defaultValue = "0") Integer page,
             @RequestParam(defaultValue = "20") Integer size) {
@@ -422,111 +297,59 @@ public class ProductController {
             int end = Math.min(start + size, totalElements);
             List<Product> pagedProducts = start < totalElements ? filteredProducts.subList(start, end) : List.of();
 
-            Map<String, Object> response = new HashMap<>();
-            Map<String, Object> embedded = new HashMap<>();
-            embedded.put("products", pagedProducts);
-            response.put("_embedded", embedded);
+            return ResponseEntity.ok(ApiResponse.<List<Product>>builder()
+                    .success(true)
+                    .data(pagedProducts)
+                    .message("Found " + totalElements + " products")
+                    .build());
 
-            Map<String, Object> pageInfo = new HashMap<>();
-            pageInfo.put("size", size);
-            pageInfo.put("totalElements", totalElements);
-            pageInfo.put("totalPages", totalPages);
-            pageInfo.put("number", page);
-            response.put("page", pageInfo);
-
-            return ResponseEntity.ok(response);
         } catch (Exception e) {
-            System.err.println("💥 Error searching products by name: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("Error searching products by name: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Lỗi khi tìm kiếm sản phẩm"));
         }
     }
 
-    // ✅ Health check endpoint
     @GetMapping("/health")
-    public ResponseEntity<Map<String, Object>> healthCheck() {
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", "OK");
-        response.put("message", "Product service is running");
-        response.put("timestamp", java.time.Instant.now().toString());
-        response.put("service", "ProductController");
-        return ResponseEntity.ok(response);
+    public ResponseEntity<ApiResponse<?>> healthCheck() {
+        return ResponseEntity.ok(ApiResponse.success("Product service is running"));
     }
 
-    // ✅ Test endpoint
     @PostMapping("/test")
-    public ResponseEntity<Map<String, Object>> testEndpoint(@RequestBody(required = false) Map<String, Object> data) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Test endpoint works!");
-        response.put("receivedData", data);
-        response.put("timestamp", java.time.Instant.now().toString());
-        response.put("dataType", data != null ? data.getClass().getSimpleName() : "null");
-
-        System.out.println("🧪 Test endpoint called with data: " + data);
-
-        return ResponseEntity.ok(response);
+    public ResponseEntity<ApiResponse<?>> testEndpoint(@RequestBody(required = false) JsonNode data) {
+        return ResponseEntity.ok(ApiResponse.success("Test endpoint works!", data));
     }
 
-    // ✅ Debug endpoint để test JSON parsing
     @PostMapping("/debug")
-    public ResponseEntity<Map<String, Object>> debugEndpoint(@RequestBody Map<String, Object> data) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Debug endpoint");
-        response.put("receivedData", data);
-        response.put("dataKeys", data != null ? data.keySet() : null);
-
-        // Convert to JsonNode
+    public ResponseEntity<ApiResponse<?>> debugEndpoint(@RequestBody JsonNode data) {
         try {
-            JsonNode jsonNode = objectMapper.valueToTree(data);
-            response.put("jsonNodeData", jsonNode.toString());
-            response.put("conversionSuccess", true);
+            return ResponseEntity.ok(ApiResponse.success("Debug endpoint", data));
         } catch (Exception e) {
-            response.put("conversionError", e.getMessage());
-            response.put("conversionSuccess", false);
+            log.error("Error in debug endpoint: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Debug failed"));
         }
-
-        System.out.println("🐛 Debug endpoint called with data: " + data);
-
-        return ResponseEntity.ok(response);
     }
 
-    /**
-     * Generate product description using AI based on product name
-     * POST /api/products/generate-description
-     * Body: { "productName": "Tên sách" }
-     */
     @PostMapping("/generate-description")
-    public ResponseEntity<Map<String, Object>> generateDescription(@RequestBody Map<String, String> request) {
+    public ResponseEntity<ApiResponse<?>> generateDescription(@RequestBody JsonNode request) {
         try {
-            String productName = request != null ? request.get("productName") : null;
+            String productName = request.has("productName") ? request.get("productName").asText() : null;
 
             if (productName == null || productName.trim().isEmpty()) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "Tên sản phẩm không được để trống");
-                return ResponseEntity.badRequest().body(error);
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Tên sản phẩm không được để trống"));
             }
 
-            System.out.println("🤖 Generating description for product: " + productName);
-
+            log.info("Generating description for product: {}", productName);
             String description = aiGenerateDescriptionService.generateDescription(productName);
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("description", description);
-            response.put("productName", productName);
-            response.put("success", true);
-
-            System.out.println("✅ Description generated successfully");
-
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(ApiResponse.success("description", description));
 
         } catch (Exception e) {
-            System.err.println("💥 Error generating description: " + e.getMessage());
-            e.printStackTrace();
-
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", "Có lỗi xảy ra khi tạo mô tả: " + e.getMessage());
-            error.put("success", false);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+            log.error("Error generating description: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Có lỗi xảy ra khi tạo mô tả"));
         }
     }
 }
