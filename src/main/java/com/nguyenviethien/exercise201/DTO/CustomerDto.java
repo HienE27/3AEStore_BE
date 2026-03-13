@@ -1,18 +1,25 @@
 package com.nguyenviethien.exercise201.DTO;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Builder;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@Setter
+import java.util.UUID;
+
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class CustomerDto {
-    private java.util.UUID id;
+    private UUID id;
     private String firstName;
     private String lastName;
+    private String email;
+    private String userName;
+    private Boolean active;
+    private Boolean activated;
+    private String avatarUrl;
 }
-
-

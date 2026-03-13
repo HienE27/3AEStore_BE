@@ -1,20 +1,22 @@
 package com.nguyenviethien.exercise201.DTO;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Builder;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@Setter
+import java.util.UUID;
+
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ReviewImageDto {
-    private java.util.UUID id;
+    private UUID id;
     private String imageUrl;
     private String imageName;
     private Long imageSize;
     private Integer sortOrder;
 }
-
-
