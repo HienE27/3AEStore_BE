@@ -21,9 +21,6 @@ public class ReviewImage {
     @Column(name = "image_url", nullable = false)
     private String imageUrl; // Đường dẫn đến ảnh
 
-    @Column(name = "url", nullable = true)
-    private String url;
-
     @Column(name = "image_name", nullable = false)
     private String imageName; // Tên file ảnh gốc
 

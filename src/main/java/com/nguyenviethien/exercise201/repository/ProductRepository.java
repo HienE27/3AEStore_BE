@@ -68,8 +68,15 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
        // Find by slug
        Optional<Product> findBySlug(String slug);
 
+       // Find by SKU
+       Optional<Product> findBySku(String sku);
+
        // Find by price range
        @Query("SELECT p FROM Product p WHERE p.salePrice BETWEEN :minPrice AND :maxPrice AND p.published = true")
        List<Product> findByPriceRange(@Param("minPrice") java.math.BigDecimal minPrice,
                      @Param("maxPrice") java.math.BigDecimal maxPrice);
+
+       // Đếm số sách theo danh mục
+       @Query("SELECT COUNT(p) FROM Product p JOIN p.productCategories pc WHERE pc.category.id = :categoryId AND p.published = true")
+       Long countByCategoryId(@Param("categoryId") UUID categoryId);
 }

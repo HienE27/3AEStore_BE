@@ -8,8 +8,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -29,7 +32,11 @@ import com.nguyenviethien.exercise201.repository.StaffAccountRepository;
 import com.nguyenviethien.exercise201.service.CustomerService;
 import com.nguyenviethien.exercise201.service.OrderItemService;
 import com.nguyenviethien.exercise201.service.OrderService;
+import com.nguyenviethien.exercise201.repository.*;
+import com.nguyenviethien.exercise201.entity.*;
 import com.nguyenviethien.exercise201.service.impl.OrderServiceImpl;
+import com.nguyenviethien.exercise201.service.JWT.JwtService;
+import com.nguyenviethien.exercise201.repository.GalleryRepository;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:3000")
@@ -56,6 +63,12 @@ public class OrderController {
 
     @Autowired
     private StaffAccountRepository staffAccountRepository;
+    
+    @Autowired
+    private JwtService jwtService;
+    
+    @Autowired
+    private GalleryRepository galleryRepository;
 
     // ===== CHECKOUT ENDPOINT =====
     @PostMapping("/checkout")
@@ -522,6 +535,31 @@ public ResponseEntity<?> debugCustomerInfo(@PathVariable String customerId) {
         }
     }
 
+    // Get single order by ID
+    @GetMapping("/{orderId}")
+    public ResponseEntity<?> getOrderById(@PathVariable String orderId) {
+        try {
+            System.out.println("=== GET ORDER BY ID ===");
+            System.out.println("Order ID: " + orderId);
+
+            Optional<Order> orderOpt = orderService.findById(orderId);
+            if (orderOpt.isEmpty()) {
+                System.out.println("Order not found: " + orderId);
+                return ResponseEntity.notFound().build();
+            }
+
+            Order order = orderOpt.get();
+            AdminOrderDTO orderDTO = convertToAdminOrderDTO(order);
+
+            System.out.println("Found order: " + orderId);
+            return ResponseEntity.ok(orderDTO);
+        } catch (Exception e) {
+            System.out.println("ERROR in getOrderById: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body("Error loading order: " + e.getMessage());
+        }
+    }
+
     @GetMapping("/{orderId}/details")
     public ResponseEntity<?> getOrderDetails(@PathVariable String orderId) {
         try {
@@ -816,29 +854,109 @@ public ResponseEntity<?> confirmOrderDelivery(
 @PutMapping("/{orderId}/update-shipping")
 public ResponseEntity<?> updateShippingStatus(
         @PathVariable String orderId,
-        @RequestParam String staffId,
-        @RequestBody UpdateShippingRequest request) {
+        @RequestParam(required = false) String staffId,
+        @RequestBody UpdateShippingRequest request,
+        HttpServletRequest httpRequest) {
     try {
         System.out.println("=== UPDATE SHIPPING STATUS ===");
         System.out.println("Order ID: " + orderId);
-        System.out.println("Staff ID: " + staffId);
-        System.out.println("New status: " + request.getStatus());
+        System.out.println("Staff ID (param): " + staffId);
+        System.out.println("Request body: status=" + request.getStatus() + ", trackingNumber=" + request.getTrackingNumber() + ", note=" + request.getNote() + ", staffId=" + request.getStaffId());
+        String authHeader = httpRequest.getHeader("Authorization");
+        System.out.println("Authorization header: " + (authHeader != null ? authHeader.replaceFirst("Bearer ", "Bearer <token>") : "none"));
         
         // Validate inputs
         if (orderId == null || orderId.trim().isEmpty()) {
-            return ResponseEntity.badRequest().body("Order ID không hợp lệ");
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "Order ID không hợp lệ");
+            return ResponseEntity.badRequest().body(err);
         }
         if (staffId == null || staffId.trim().isEmpty()) {
-            return ResponseEntity.badRequest().body("Staff ID không hợp lệ");
+            // allow staffId from body
+            if (request.getStaffId() == null || request.getStaffId().trim().isEmpty()) {
+                Map<String, Object> err = new HashMap<>();
+                err.put("success", false);
+                err.put("message", "Staff ID không hợp lệ");
+                return ResponseEntity.badRequest().body(err);
+            }
         }
 
         Optional<Order> orderOpt = orderService.findById(orderId);
         if (orderOpt.isEmpty()) {
-            return ResponseEntity.badRequest().body("Không tìm thấy đơn hàng");
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "Không tìm thấy đơn hàng");
+            return ResponseEntity.badRequest().body(err);
         }
         
         Order order = orderOpt.get();
-        UUID staffUUID = UUID.fromString(staffId);
+        // Allow staffId to be provided either as request param or inside the request body
+        if ((staffId == null || staffId.trim().isEmpty()) && request.getStaffId() != null) {
+            staffId = request.getStaffId();
+        }
+
+        // Fallback resolution sequence when staffId missing:
+        // 1) Try SecurityContext username -> findByUser_name
+        // 2) Try SecurityContext username -> findByEmail
+        // 3) Try id claim in JWT token
+        if (staffId == null || staffId.trim().isEmpty()) {
+            try {
+                String username = SecurityContextHolder.getContext().getAuthentication() != null ?
+                        SecurityContextHolder.getContext().getAuthentication().getName() : null;
+                if (username != null && !username.trim().isEmpty()) {
+                    try {
+                        var staffAcc = staffAccountRepository.findByUser_name(username);
+                        if (staffAcc == null) {
+                            staffAcc = staffAccountRepository.findByEmail(username).orElse(null);
+                        }
+                        if (staffAcc != null) {
+                            staffId = staffAcc.getId().toString();
+                            System.out.println("Resolved staffId from security username/email lookup: " + staffId);
+                        } else {
+                            System.out.println("No staff account found for username/email: " + username);
+                        }
+                    } catch (Exception e) {
+                        System.out.println("Error looking up staff by username/email: " + e.getMessage());
+                    }
+                }
+                // If still missing, try extract id claim from token
+                if (staffId == null || staffId.trim().isEmpty()) {
+                    if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                        String token = authHeader.substring(7);
+                        try {
+                            UUID idFromToken = jwtService.extractId(token);
+                            if (idFromToken != null) {
+                                staffId = idFromToken.toString();
+                                System.out.println("Resolved staffId from token id claim: " + staffId);
+                            }
+                        } catch (Exception ex) {
+                            System.out.println("Could not extract id from token: " + ex.getMessage());
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                System.out.println("Could not resolve staffId from security/token: " + ex.getMessage());
+            }
+        }
+
+        UUID staffUUID = null;
+        if (staffId != null && !staffId.trim().isEmpty()) {
+            try {
+                staffUUID = UUID.fromString(staffId);
+            } catch (IllegalArgumentException iae) {
+                Map<String, Object> err = new HashMap<>();
+                err.put("success", false);
+                err.put("message", "Staff ID không đúng định dạng UUID: " + staffId);
+                return ResponseEntity.badRequest().body(err);
+            }
+        } else {
+            // staffId not provided and could not be resolved from SecurityContext earlier
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "Unauthorized: staff authentication missing. Please login as staff and try again.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(err);
+        }
         
         // Verify staff
         StaffAccount staff = staffAccountRepository.findById(staffUUID)
@@ -850,6 +968,12 @@ public ResponseEntity<?> updateShippingStatus(
 
         // Update based on status
         String newStatus = request.getStatus();
+        if (newStatus == null || newStatus.trim().isEmpty()) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "Trạng thái mới không được để trống");
+            return ResponseEntity.badRequest().body(err);
+        }
         switch (newStatus.toLowerCase()) {
             case "shipped":
                 // Find Shipped status
@@ -859,7 +983,10 @@ public ResponseEntity<?> updateShippingStatus(
                         .findFirst();
 
                 if (shippedStatusOpt.isEmpty()) {
-                    return ResponseEntity.badRequest().body("Không tìm thấy trạng thái Shipped");
+                    Map<String, Object> err = new HashMap<>();
+                    err.put("success", false);
+                    err.put("message", "Không tìm thấy trạng thái Shipped");
+                    return ResponseEntity.badRequest().body(err);
                 }
 
                 order.setOrderStatus(shippedStatusOpt.get());
@@ -880,7 +1007,10 @@ public ResponseEntity<?> updateShippingStatus(
                         .findFirst();
 
                 if (deliveredStatusOpt.isEmpty()) {
-                    return ResponseEntity.badRequest().body("Không tìm thấy trạng thái Delivered");
+                    Map<String, Object> err = new HashMap<>();
+                    err.put("success", false);
+                    err.put("message", "Không tìm thấy trạng thái Delivered");
+                    return ResponseEntity.badRequest().body(err);
                 }
 
                 order.setOrderStatus(deliveredStatusOpt.get());
@@ -915,11 +1045,17 @@ public ResponseEntity<?> updateShippingStatus(
         return ResponseEntity.ok(response);
     } catch (IllegalArgumentException e) {
         System.out.println("ERROR: IllegalArgumentException - " + e.getMessage());
-        return ResponseEntity.badRequest().body("Dữ liệu không hợp lệ: " + e.getMessage());
+        Map<String, Object> err = new HashMap<>();
+        err.put("success", false);
+        err.put("message", "Dữ liệu không hợp lệ: " + e.getMessage());
+        return ResponseEntity.badRequest().body(err);
     } catch (Exception e) {
         System.out.println("ERROR: Exception - " + e.getMessage());
         e.printStackTrace();
-        return ResponseEntity.badRequest().body("Lỗi: " + e.getMessage());
+        Map<String, Object> err = new HashMap<>();
+        err.put("success", false);
+        err.put("message", "Lỗi: " + e.getMessage());
+        return ResponseEntity.badRequest().body(err);
     }
 }
 
@@ -1200,14 +1336,25 @@ public ResponseEntity<?> updateShippingStatus(
     private OrderItemDTO convertToOrderItemDTO(OrderItem orderItem) {
         OrderItemDTO dto = new OrderItemDTO();
         dto.setId(orderItem.getId().toString());
+        dto.setProductId(orderItem.getProduct().getId().toString());
         dto.setProductName(orderItem.getProduct().getProductName());
         
-        // Try to get actual product image, fallback to default
-        String productImage = "/images/default-image.jpg";
-        // If you have ProductImage entity, uncomment and modify this:
-        // if (orderItem.getProduct().getProductImages() != null && !orderItem.getProduct().getProductImages().isEmpty()) {
-        //     productImage = orderItem.getProduct().getProductImages().get(0).getImageUrl();
-        // }
+        // Get actual product image from Gallery
+        String productImage = "/images/items/1.jpg"; // Default fallback
+        try {
+            List<Gallery> thumbnails = galleryRepository.findThumbnailByProductId(orderItem.getProduct().getId());
+            if (thumbnails != null && !thumbnails.isEmpty()) {
+                productImage = thumbnails.get(0).getImage();
+            } else {
+                // Try to get any image for this product
+                List<Gallery> allImages = galleryRepository.findByProductId(orderItem.getProduct().getId());
+                if (allImages != null && !allImages.isEmpty()) {
+                    productImage = allImages.get(0).getImage();
+                }
+            }
+        } catch (Exception e) {
+            // Keep default fallback if error
+        }
         dto.setProductImage(productImage);
         
         dto.setQuantity(orderItem.getQuantity());
@@ -1466,6 +1613,7 @@ public void setNote(String note) { this.note = note; }
 
     public static class OrderItemDTO {
         private String id;
+        private String productId;
         private String productName;
         private String productImage;
         private int quantity;
@@ -1474,6 +1622,9 @@ public void setNote(String note) { this.note = note; }
 
         public String getId() { return id; }
         public void setId(String id) { this.id = id; }
+
+        public String getProductId() { return productId; }
+        public void setProductId(String productId) { this.productId = productId; }
 
         public String getProductName() { return productName; }
         public void setProductName(String productName) { this.productName = productName; }
@@ -1521,6 +1672,7 @@ public void setNote(String note) { this.note = note; }
     private String status;
     private String trackingNumber;
     private String note;
+    private String staffId;
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
@@ -1530,5 +1682,8 @@ public void setNote(String note) { this.note = note; }
 
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
+    
+    public String getStaffId() { return staffId; }
+    public void setStaffId(String staffId) { this.staffId = staffId; }
     }
 }

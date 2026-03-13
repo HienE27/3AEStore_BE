@@ -62,4 +62,7 @@ public interface CustomerService {
      * @throws RuntimeException nếu không tìm thấy email.
      */
     boolean activateAccount(String email, String code);
+
+    // Cập nhật avatar
+    Customer updateAvatar(UUID id, String avatarUrl);
 }

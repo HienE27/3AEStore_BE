@@ -241,26 +241,71 @@ public void handleVNPayCallback(HttpServletRequest request, HttpServletResponse 
     String responseCode = request.getParameter("vnp_ResponseCode");
     String txnRef = request.getParameter("vnp_TxnRef");
 
+        // Log full callback params for debugging (temporary - remove in production)
+        try {
+            Map<String, String[]> allParams = request.getParameterMap();
+            Map<String, String> flat = new HashMap<>();
+            for (String k : allParams.keySet()) {
+                String[] vals = allParams.get(k);
+                flat.put(k, vals != null && vals.length > 0 ? String.join(",", vals) : "");
+            }
+            logger.info("VNPay callback received. Params: {}", flat);
+        } catch (Exception ex) {
+            logger.warn("Failed to log VNPay callback params: {}", ex.getMessage());
+        }
+
     if (txnRef == null) {
-        response.sendRedirect("http://localhost:3001/checkout?success=false");
+        response.sendRedirect("http://localhost:3000/checkout?success=false");
         return;
     }
 
     Order order = orderService.findById(txnRef).orElse(null);
 
     if (order == null) {
-        response.sendRedirect("http://localhost:3001/checkout?success=false&orderId=" + txnRef);
+        response.sendRedirect("http://localhost:3000/checkout?success=false&orderId=" + txnRef);
         return;
     }
+
+        // Verify secure hash from VNPay for security
+        String vnpSecureHash = request.getParameter("vnp_SecureHash");
+        if (vnpSecureHash != null && !vnpSecureHash.isEmpty()) {
+            // collect parameters excluding secure hash fields
+            Map<String, String[]> paramMap = request.getParameterMap();
+            Map<String, String> fields = new HashMap<>();
+            for (String key : paramMap.keySet()) {
+                if ("vnp_SecureHash".equals(key) || "vnp_SecureHashType".equals(key)) continue;
+                String value = request.getParameter(key);
+                if (value != null && !value.isEmpty()) {
+                    fields.put(key, value);
+                }
+            }
+            List<String> fieldNames = new ArrayList<>(fields.keySet());
+            Collections.sort(fieldNames);
+            StringBuilder hashData = new StringBuilder();
+            for (Iterator<String> it = fieldNames.iterator(); it.hasNext(); ) {
+                String fieldName = it.next();
+                hashData.append(fieldName).append("=").append(fields.get(fieldName));
+                if (it.hasNext()) hashData.append("&");
+            }
+            String calculatedHash = VNPayConfig.hmacSHA512(VNPayConfig.secretKey, hashData.toString());
+            if (!calculatedHash.equalsIgnoreCase(vnpSecureHash)) {
+                logger.warn("VNPay callback secure hash mismatch for txnRef {}. calculated={}, received={}", txnRef, calculatedHash, vnpSecureHash);
+                // treat as failed/invalid
+                response.sendRedirect("http://localhost:3000/checkout?success=false&orderId=" + txnRef);
+                return;
+            }
+        } else {
+            logger.warn("VNPay callback missing vnp_SecureHash for txnRef {}", txnRef);
+        }
 
     if ("00".equals(responseCode)) {
         order.setPaymentStatus("COMPLETED");
         orderService.save(order);
-        response.sendRedirect("http://localhost:3001/checkout?success=true&orderId=" + txnRef);
+        response.sendRedirect("http://localhost:3000/checkout?success=true&orderId=" + txnRef);
     } else {
         order.setPaymentStatus("FAILED");
         orderService.save(order);
-        response.sendRedirect("http://localhost:3001/checkout?success=false&orderId=" + txnRef);
+        response.sendRedirect("http://localhost:3000/checkout?success=false&orderId=" + txnRef);
     }
 }
 

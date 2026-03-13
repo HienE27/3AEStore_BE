@@ -218,6 +218,12 @@ public void deleteById(UUID id) {
 
         return false;
     }
+
+    @Override
+    public Customer updateAvatar(UUID id, String avatarUrl) {
+        Customer customer = customerRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy khách hàng: " + id));
+        customer.setAvatarUrl(avatarUrl);
+        return customerRepository.save(customer);
+    }
 }
-// Lưu ý: Phần gửi mail cần cấu hình JavaMailSender trong ứng dụng của bạn.
-// Bạn cần cấu hình các thông tin SMTP trong application.properties hoặc application.yml để gửi mail.

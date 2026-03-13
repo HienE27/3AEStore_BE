@@ -1,0 +1,40 @@
+package com.nguyenviethien.exercise201.config;
+
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+
+/**
+ * Global Jackson Configuration
+ * - Case-insensitive enum deserialization
+ * - Write dates as ISO-8601 strings
+ * - Fail on unknown properties = false
+ */
+@Configuration
+public class JacksonConfig {
+
+    @Bean
+    @Primary
+    public ObjectMapper objectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        
+        // Register Java 8 date/time module
+        mapper.registerModule(new JavaTimeModule());
+        
+        // Write dates as ISO-8601 strings instead of timestamps
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        
+        // Don't fail on unknown properties
+        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        
+        // Use FAIL_ON_NUMBERS_FOR_ENUMS = false to allow case-insensitive deserialization
+        mapper.disable(DeserializationFeature.FAIL_ON_NUMBERS_FOR_ENUMS);
+        
+        return mapper;
+    }
+}
+

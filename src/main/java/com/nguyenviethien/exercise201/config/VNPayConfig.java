@@ -9,12 +9,11 @@ import java.util.Random;
 
 public class VNPayConfig {
     public static String vnp_PayUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
-    public static String vnp_ReturnUrl = "http://localhost:8080/api/payments/vnpay/callback";
-    //public static String vnp_ReturnUrl = "http://localhost:8080/vnpay/payment_info";
-    //public static String vnp_ReturnUrl = "http://localhost:8080/vnpay_jsp/vnpay_return.jsp";
-    //public static String vnp_ReturnUrl = "http://localhost:3000/checkout";
-    public static String vnp_TmnCode = "FDYW0HEB";
-    public static String secretKey = "ADEO3FQIQCF1RVFFEA5EH1JQ7IM1UKJI";
+    private static final String DEFAULT_RETURN = "http://localhost:8080/api/payments/vnpay/callback";
+    public static String vnp_ReturnUrl = System.getenv().getOrDefault("VNPAY_RETURN_URL", DEFAULT_RETURN);
+    // Read TMN and secret from env if provided (helps testing with ngrok or different sandbox accounts)
+    public static String vnp_TmnCode = System.getenv().getOrDefault("VNPAY_TMN", "OXLAE1AD");
+    public static String secretKey = System.getenv().getOrDefault("VNPAY_SECRET", "TJQ0PGZNUDTV63RKVMOVUA7L99N7OKTB");
     public static String vnp_ApiUrl = "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction";
     public static String vnp_Version = "2.1.0";
     public static String vnp_Command = "pay";

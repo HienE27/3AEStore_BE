@@ -37,6 +37,11 @@ public class ReviewReply {
 
     @Column(name = "created_at", nullable = false)
     private Timestamp createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = new Timestamp(System.currentTimeMillis());
+    }
 }
 
 

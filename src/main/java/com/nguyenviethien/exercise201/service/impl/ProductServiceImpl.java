@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -139,9 +140,18 @@ public class ProductServiceImpl implements ProductService {
             Product product = new Product();
 
             // Basic fields
-            product.setSlug(productJson.get("slug").asText());
+            // ✅ AUTO-GENERATE SLUG nếu không được cung cấp hoặc rỗng
+            String slug = productJson.has("slug") && !productJson.get("slug").asText().trim().isEmpty()
+                    ? productJson.get("slug").asText().trim()
+                    : generateSlug(productJson.get("productName").asText(), null);
+            product.setSlug(slug);
             product.setProductName(productJson.get("productName").asText());
-            product.setSku(productJson.get("sku").asText());
+
+            // ✅ AUTO-GENERATE SKU nếu không được cung cấp hoặc rỗng
+            String sku = productJson.has("sku") && !productJson.get("sku").asText().trim().isEmpty()
+                    ? productJson.get("sku").asText().trim()
+                    : generateSku(productJson.get("productName").asText(), null);
+            product.setSku(sku);
 
             // ✅ QUAN TRỌNG: Handle BigDecimal properly
             product.setSalePrice(new BigDecimal(productJson.get("salePrice").asDouble()));
@@ -288,9 +298,18 @@ public class ProductServiceImpl implements ProductService {
                     .orElseThrow(() -> new RuntimeException("Staff not found with ID: " + staffId));
 
             // Update basic fields manually (similar to save method)
-            existingProduct.setSlug(productJson.get("slug").asText());
+            // ✅ AUTO-GENERATE SLUG nếu không được cung cấp hoặc rỗng
+            String slug = productJson.has("slug") && !productJson.get("slug").asText().trim().isEmpty()
+                    ? productJson.get("slug").asText().trim()
+                    : generateSlug(productJson.get("productName").asText(), productId);
+            existingProduct.setSlug(slug);
             existingProduct.setProductName(productJson.get("productName").asText());
-            existingProduct.setSku(productJson.get("sku").asText());
+
+            // ✅ AUTO-GENERATE SKU nếu không được cung cấp hoặc rỗng
+            String sku = productJson.has("sku") && !productJson.get("sku").asText().trim().isEmpty()
+                    ? productJson.get("sku").asText().trim()
+                    : generateSku(productJson.get("productName").asText(), productId);
+            existingProduct.setSku(sku);
             existingProduct.setSalePrice(new BigDecimal(productJson.get("salePrice").asDouble()));
             existingProduct.setComparePrice(new BigDecimal(productJson.get("comparePrice").asDouble()));
             existingProduct.setBuyingPrice(new BigDecimal(productJson.get("buyingPrice").asDouble()));
@@ -440,5 +459,116 @@ public class ProductServiceImpl implements ProductService {
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 3);
         List<Product> products = productRepository.findTop3ByOrderByCreatedAtDescWithRelationships(pageable);
         return products.stream().limit(3).collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    public Long countByCategoryId(UUID categoryId) {
+        return productRepository.countByCategoryId(categoryId);
+    }
+
+    @Override
+    public Long countAllProducts() {
+        return productRepository.count();
+    }
+
+    // ========== UTILITY METHODS FOR AUTO-GENERATING SLUG AND SKU ==========
+
+    /**
+     * Generate SEO-friendly slug from product name
+     */
+    private String generateSlug(String productName, UUID existingProductId) {
+        if (productName == null || productName.trim().isEmpty()) {
+            return "product-" + System.currentTimeMillis();
+        }
+
+        // Convert to lowercase and remove diacritics
+        String normalized = normalizeVietnamese(productName.toLowerCase().trim());
+
+        // Replace spaces and special characters with hyphens
+        String slug = normalized.replaceAll("[^a-z0-9\\s-]", "")
+                                .replaceAll("\\s+", "-")
+                                .replaceAll("-+", "-")
+                                .replaceAll("^-|-$", "");
+
+        // Add unique suffix if slug exists
+        String baseSlug = slug;
+        int counter = 1;
+        while (isSlugExists(baseSlug, existingProductId)) {
+            baseSlug = slug + "-" + counter;
+            counter++;
+        }
+
+        return baseSlug;
+    }
+
+    /**
+     * Generate unique SKU
+     */
+    private String generateSku(String productName, UUID existingProductId) {
+        // Generate SKU prefix from product name (first 3 characters, uppercase)
+        String prefix = "SKU";
+        if (productName != null && !productName.trim().isEmpty()) {
+            String normalized = normalizeVietnamese(productName.toUpperCase().replaceAll("[^A-Z0-9]", ""));
+            prefix = normalized.length() >= 3 ? normalized.substring(0, 3) : normalized + "X";
+        }
+
+        // Generate unique SKU with timestamp and random suffix
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        String randomSuffix = String.valueOf((int) (Math.random() * 1000));
+
+        String baseSku = prefix + "-" + timestamp.substring(timestamp.length() - 6) + "-" + randomSuffix;
+
+        // Ensure SKU is unique
+        String finalSku = baseSku;
+        int counter = 1;
+        while (isSkuExists(finalSku, existingProductId)) {
+            finalSku = prefix + "-" + timestamp.substring(timestamp.length() - 6) + "-" + (1000 + counter);
+            counter++;
+        }
+
+        return finalSku;
+    }
+
+    /**
+     * Check if slug already exists
+     */
+    private boolean isSlugExists(String slug, UUID excludeProductId) {
+        if (slug == null) return false;
+        Optional<Product> existing = productRepository.findBySlug(slug);
+        if (existing.isEmpty()) return false;
+        if (excludeProductId != null && existing.get().getId().equals(excludeProductId)) return false;
+        return true;
+    }
+
+    /**
+     * Check if SKU already exists
+     */
+    private boolean isSkuExists(String sku, UUID excludeProductId) {
+        if (sku == null) return false;
+        Optional<Product> existing = productRepository.findBySku(sku);
+        if (existing.isEmpty()) return false;
+        if (excludeProductId != null && existing.get().getId().equals(excludeProductId)) return false;
+        return true;
+    }
+
+    /**
+     * Remove Vietnamese diacritics
+     */
+    private String normalizeVietnamese(String input) {
+        if (input == null) return "";
+        return input.replaceAll("[àáảãạâầấẩẫậăằắẳẵặ]", "a")
+                    .replaceAll("[ÀÁẢÃẠÂẦẤẨẪẬĂẰẮẲẴẶ]", "A")
+                    .replaceAll("[èéẻẽẹêềếểễệ]", "e")
+                    .replaceAll("[ÈÉẺẼẸÊỀẾỂỄỆ]", "E")
+                    .replaceAll("[ìíỉĩị]", "i")
+                    .replaceAll("[ÌÍỈĨỊ]", "I")
+                    .replaceAll("[òóỏõọôồốổỗộơờớởỡợ]", "o")
+                    .replaceAll("[ÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢ]", "O")
+                    .replaceAll("[ùúủũụưừứửữự]", "u")
+                    .replaceAll("[ÙÚỦŨỤƯỪỨỬỮỰ]", "U")
+                    .replaceAll("[ýỳỷỹỵ]", "y")
+                    .replaceAll("[ÝỲỶỸỴ]", "Y")
+                    .replaceAll("đ", "d")
+                    .replaceAll("Đ", "D");
     }
 }

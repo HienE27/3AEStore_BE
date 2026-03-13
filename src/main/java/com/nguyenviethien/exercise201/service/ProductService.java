@@ -14,7 +14,7 @@ public interface ProductService {
     List<Product> getAllProducts();
 
     Optional<Product> getProductById(UUID id);
-    
+
     // ✅ THÊM METHOD NÀY
     Optional<Product> getProductByIdWithCategories(UUID id);
 
@@ -29,4 +29,8 @@ public interface ProductService {
     public List<Product> getProductsByCategoryId(UUID categoryId);
 
     public List<Product> getTop3LatestProducts();
+
+    // ✅ Các method đếm số sách
+    Long countByCategoryId(UUID categoryId);
+    Long countAllProducts();
 }

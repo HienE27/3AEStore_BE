@@ -168,8 +168,8 @@ public class ProductController {
                 return ResponseEntity.badRequest().body(error);
             }
 
-            // Validate required fields
-            String[] requiredFields = { "productName", "sku", "slug" };
+            // Validate required fields (slug và sku sẽ được auto-generate nếu không cung cấp)
+            String[] requiredFields = { "productName" };
             for (String field : requiredFields) {
                 if (!productData.containsKey(field) ||
                         productData.get(field) == null ||
@@ -328,6 +328,39 @@ public class ProductController {
 
         } catch (Exception e) {
             System.err.println("💥 Error getting products by category: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    // Endpoint để đếm số sách theo danh mục
+    @GetMapping("/count")
+    public ResponseEntity<?> countProductsByCategory(@RequestParam(required = false) String categoryId) {
+        try {
+            Map<String, Object> response = new HashMap<>();
+
+            if (categoryId != null && !categoryId.isEmpty()) {
+                // Đếm sách theo 1 danh mục cụ thể
+                UUID catId = UUID.fromString(categoryId);
+                Long count = productService.countByCategoryId(catId);
+                response.put("count", count);
+
+                Map<String, Object> pageInfo = new HashMap<>();
+                pageInfo.put("totalElements", count);
+                response.put("page", pageInfo);
+            } else {
+                // Đếm tổng sách
+                Long totalCount = productService.countAllProducts();
+                response.put("count", totalCount);
+
+                Map<String, Object> pageInfo = new HashMap<>();
+                pageInfo.put("totalElements", totalCount);
+                response.put("page", pageInfo);
+            }
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            System.err.println("💥 Error counting products: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }

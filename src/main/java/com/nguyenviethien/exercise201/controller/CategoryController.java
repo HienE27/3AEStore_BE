@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.nguyenviethien.exercise201.entity.Category;
 import com.nguyenviethien.exercise201.service.CategoryService;
+import com.nguyenviethien.exercise201.service.ProductService;
 
 @RestController
 @RequestMapping("/api/categories")
@@ -19,6 +20,9 @@ public class CategoryController {
 
     @Autowired
     private CategoryService categoryService;
+
+    @Autowired
+    private ProductService productService;
 
     @GetMapping
     public ResponseEntity<?> getAllCategories() {
@@ -69,6 +73,30 @@ public class CategoryController {
             } catch (java.io.IOException ex) {}
             // #endregion
             System.err.println("💥 Error getting all categories: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    // Endpoint để lấy số lượng sách của tất cả các danh mục
+    @GetMapping("/counts")
+    public ResponseEntity<?> getCategoryCounts() {
+        try {
+            List<Category> categories = categoryService.findAll();
+            Map<String, Long> counts = new HashMap<>();
+
+            for (Category cat : categories) {
+                if (cat.getId() != null) {
+                    Long count = productService.countByCategoryId(cat.getId());
+                    counts.put(cat.getId().toString(), count);
+                }
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("counts", counts);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            System.err.println("💥 Error getting category counts: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }

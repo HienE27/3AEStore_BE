@@ -345,6 +345,34 @@ public class CustomerController {
         }
     }
 
+    // Upload avatar - lưu trực tiếp URL
+    @PostMapping("/{id}/avatar")
+    public ResponseEntity<?> uploadAvatar(@PathVariable UUID id, @RequestBody Map<String, String> request) {
+        try {
+            if (!customerService.existsById(id)) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            String avatarUrl = request.get("avatarUrl");
+            if (avatarUrl == null || avatarUrl.isEmpty()) {
+                return ResponseEntity.badRequest().body("Vui lòng cung cấp URL ảnh");
+            }
+            
+            // Cập nhật avatar
+            customerService.updateAvatar(id, avatarUrl);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("avatarUrl", avatarUrl);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Lỗi khi cập nhật ảnh đại diện: " + e.getMessage());
+        }
+    }
+
     // Xóa khách hàng
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteCustomer(@PathVariable UUID id) {

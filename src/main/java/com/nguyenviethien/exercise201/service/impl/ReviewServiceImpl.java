@@ -4,6 +4,7 @@ import com.nguyenviethien.exercise201.entity.*;
 import com.nguyenviethien.exercise201.repository.*;
 import com.nguyenviethien.exercise201.service.ReviewService;
 import com.nguyenviethien.exercise201.service.ReviewImageService;
+import com.nguyenviethien.exercise201.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,8 +12,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -20,60 +21,160 @@ import java.util.UUID;
 public class ReviewServiceImpl implements ReviewService {
 
     private final ReviewRepository reviewRepository;
+    private final ReviewReportRepository reviewReportRepository;
     private final ReviewImageService reviewImageService;
     private final ProductRepository productRepository;
     private final CustomerRepository customerRepository;
     private final OrderItemRepository orderItemRepository;
+    private final EmailService emailService;
 
     @Override
+    @Transactional
     public Review createReview(Review review, List<MultipartFile> images) throws Exception {
-        // Validate dữ liệu
+        System.out.println("=== [DEBUG] ReviewServiceImpl.createReview START ===");
+        System.out.println("[DEBUG] ratingPoint: " + review.getRatingPoint());
+        System.out.println("[DEBUG] customerId: " + (review.getCustomer() != null ? review.getCustomer().getId() : "NULL"));
+        System.out.println("[DEBUG] productId: " + (review.getProduct() != null ? review.getProduct().getId() : "NULL"));
+        System.out.println("[DEBUG] orderItemId: " + (review.getOrderItem() != null ? review.getOrderItem().getId() : "NULL"));
+        
+        // Validate rating
         if (review.getRatingPoint() == null || review.getRatingPoint() < 1 || review.getRatingPoint() > 5) {
+            System.out.println("[DEBUG] ERROR: Invalid rating point");
             throw new IllegalArgumentException("Rating point must be between 1 and 5");
         }
 
         // Validate required relations
         if (review.getCustomer() == null) {
+            System.out.println("[DEBUG] ERROR: Customer is null");
             throw new IllegalArgumentException("Customer is required");
         }
         if (review.getProduct() == null) {
+            System.out.println("[DEBUG] ERROR: Product is null");
             throw new IllegalArgumentException("Product is required");
         }
+        if (review.getOrderItem() == null) {
+            System.out.println("[DEBUG] ERROR: OrderItem is null");
+            throw new IllegalArgumentException("Order item is required to submit a review");
+        }
 
-        // Kiểm tra customer đã review sản phẩm này trong order item này chưa (nếu orderItem được cung cấp)
-        if (review.getOrderItem() != null) {
-            try {
-                if (hasCustomerReviewedProduct(review.getCustomer().getId(), review.getProduct().getId(), review.getOrderItem().getId())) {
-                    throw new IllegalArgumentException("Customer has already reviewed this product in this order");
-                }
-            } catch (Exception ex) {
-                // ignore check failures, proceed to save (do not block user for unexpected reasons)
+        // 1. Verify order item and status
+        System.out.println("[DEBUG] Checking order item and status...");
+        OrderItem orderItem = review.getOrderItem();
+        
+        try {
+            System.out.println("[DEBUG] orderItem.getOrder() = " + (orderItem.getOrder() != null ? "NOT NULL" : "NULL"));
+            
+            if (orderItem.getOrder() == null) {
+                System.out.println("[DEBUG] ERROR: orderItem.getOrder() is NULL");
+                throw new IllegalArgumentException("Invalid order item: order is null");
             }
+            
+            System.out.println("[DEBUG] orderId: " + orderItem.getOrder().getId());
+            System.out.println("[DEBUG] orderItem.getOrder().getOrderStatus() = " + (orderItem.getOrder().getOrderStatus() != null ? "NOT NULL" : "NULL"));
+            
+            if (orderItem.getOrder().getOrderStatus() == null) {
+                System.out.println("[DEBUG] ERROR: orderItem.getOrder().getOrderStatus() is NULL");
+                throw new IllegalArgumentException("Invalid order item status: order status is null");
+            }
+            
+            String statusName = orderItem.getOrder().getOrderStatus().getStatusName();
+            System.out.println("[DEBUG] Order status name: " + statusName);
+            
+            boolean isDelivered = "Delivered".equalsIgnoreCase(statusName) || "Completed".equalsIgnoreCase(statusName);
+            System.out.println("[DEBUG] isDelivered: " + isDelivered);
+            
+            if (!isDelivered) {
+                System.out.println("[DEBUG] ERROR: Order not delivered/completed");
+                throw new IllegalArgumentException("You can only review products from delivered orders. Current status: " + statusName);
+            }
+        } catch (NullPointerException e) {
+            System.out.println("[DEBUG] NULLPOINTER EXCEPTION at order status check: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
         }
 
-        // Set timestamp
-        review.setCreatedAt(Timestamp.from(Instant.now()));
-        // Set legacy integer rating (DB constraint requires `rating` not null)
-        if (review.getRatingPoint() != null) {
-            review.setRating(Integer.valueOf(Math.round(review.getRatingPoint())));
-        } else {
-            review.setRating(0);
+        // 2. Verify customer owns this order
+        System.out.println("[DEBUG] Checking customer ownership...");
+        try {
+            if (orderItem.getOrder().getCustomer() == null) {
+                System.out.println("[DEBUG] ERROR: orderItem.getOrder().getCustomer() is NULL");
+                throw new IllegalArgumentException("Invalid order: customer is null");
+            }
+            
+            UUID orderCustomerId = orderItem.getOrder().getCustomer().getId();
+            UUID reviewCustomerId = review.getCustomer().getId();
+            System.out.println("[DEBUG] orderCustomerId: " + orderCustomerId);
+            System.out.println("[DEBUG] reviewCustomerId: " + reviewCustomerId);
+            System.out.println("[DEBUG] customer match: " + orderCustomerId.equals(reviewCustomerId));
+            
+            if (!orderCustomerId.equals(reviewCustomerId)) {
+                System.out.println("[DEBUG] ERROR: Customer doesn't own this order");
+                throw new IllegalArgumentException("You can only review products from your own orders");
+            }
+        } catch (NullPointerException e) {
+            System.out.println("[DEBUG] NULLPOINTER EXCEPTION at customer check: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
         }
 
-        // Lưu review
-        Review savedReview = reviewRepository.save(review);
+        // 3. Check if already reviewed this order item (NOT by product - allows re-review on new purchase)
+        System.out.println("[DEBUG] Checking for existing review by order item...");
+        Review existingByOrderItem = reviewRepository.findByOrderItem(orderItem);
+        System.out.println("[DEBUG] existingByOrderItem: " + (existingByOrderItem != null ? existingByOrderItem.getId() : "NULL"));
+        if (existingByOrderItem != null) {
+            System.out.println("[DEBUG] ERROR: Already reviewed this order item");
+            throw new IllegalArgumentException("You have already reviewed this product for this order");
+        }
+        
+        // NOTE: No product-level check - allows re-reviewing same product on new purchase
 
-        // Upload ảnh nếu có
-        if (images != null && !images.isEmpty()) {
-            reviewImageService.uploadImages(savedReview, images);
+        // Set review properties
+        System.out.println("[DEBUG] Setting review properties...");
+        try {
+            review.setIsVerifiedPurchase(true);
+            review.setStatus(ReviewStatus.PENDING);
+            review.setVisible(true);
+            review.setCreatedAt(Timestamp.from(Instant.now()));
+            review.setUpdatedAt(review.getCreatedAt());
+            
+            if (review.getRatingPoint() != null) {
+                review.setRating(Math.round(review.getRatingPoint()));
+                System.out.println("[DEBUG] Set rating: " + review.getRating());
+            }
+        } catch (Exception e) {
+            System.out.println("[DEBUG] EXCEPTION when setting properties: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
         }
 
-        // Cập nhật điểm đánh giá trung bình của sản phẩm
-        if (review.getProduct() != null && review.getProduct().getId() != null) {
-            updateProductAverageRating(review.getProduct().getId());
+        // Save review
+        System.out.println("[DEBUG] About to save review...");
+        try {
+            Review savedReview = reviewRepository.save(review);
+            System.out.println("[DEBUG] Review saved successfully! ID: " + savedReview.getId());
+            
+            // Send email notification to admin
+            try {
+                emailService.sendReviewNotification(savedReview);
+            } catch (Exception emailEx) {
+                System.err.println("[WARN] Failed to send review notification email: " + emailEx.getMessage());
+            }
+            
+            // Upload images if any
+            if (images != null && !images.isEmpty()) {
+                System.out.println("[DEBUG] Uploading " + images.size() + " images...");
+                reviewImageService.uploadImages(savedReview, images);
+                System.out.println("[DEBUG] Images uploaded successfully");
+            }
+            
+            System.out.println("[DEBUG] === ReviewServiceImpl.createReview END ===");
+            return savedReview;
+        } catch (Exception e) {
+            System.out.println("[DEBUG] EXCEPTION during save: " + e.getClass().getName());
+            System.out.println("[DEBUG] Exception message: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
         }
-
-        return savedReview;
     }
 
     @Override
@@ -81,30 +182,44 @@ public class ReviewServiceImpl implements ReviewService {
         Review existingReview = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new IllegalArgumentException("Review not found"));
 
-        // Cập nhật dữ liệu
-        if (reviewData.getContent() != null) {
-            existingReview.setContent(reviewData.getContent());
+        // Check if review can be edited (not locked)
+        if (existingReview.getStatus() == ReviewStatus.LOCKED) {
+            throw new IllegalArgumentException("This review is locked and cannot be edited");
         }
+
+        // Update content
+        if (reviewData.getContent() != null) {
+            // Sanitize content to prevent XSS
+            String sanitized = reviewData.getContent()
+                    .replaceAll("<[^>]*>", "")
+                    .trim();
+            existingReview.setContent(sanitized.isEmpty() ? null : sanitized);
+        }
+
+        // Update rating
         if (reviewData.getRatingPoint() != null) {
             if (reviewData.getRatingPoint() < 1 || reviewData.getRatingPoint() > 5) {
                 throw new IllegalArgumentException("Rating point must be between 1 and 5");
             }
             existingReview.setRatingPoint(reviewData.getRatingPoint());
-            // Update legacy integer rating as well
-            existingReview.setRating(Integer.valueOf(Math.round(reviewData.getRatingPoint())));
+            existingReview.setRating(Math.round(reviewData.getRatingPoint()));
         }
 
-        // Upload ảnh mới nếu có
+        // Update anonymous flag
+        if (reviewData.getIsAnonymous() != null) {
+            existingReview.setIsAnonymous(reviewData.getIsAnonymous());
+        }
+
+        // Upload new images if any
         if (newImages != null && !newImages.isEmpty()) {
             reviewImageService.uploadImages(existingReview, newImages);
         }
 
-        Review updatedReview = reviewRepository.save(existingReview);
+        // Reset to PENDING after edit (requires re-approval)
+        existingReview.setStatus(ReviewStatus.PENDING);
+        existingReview.setUpdatedAt(Timestamp.from(Instant.now()));
 
-        // Cập nhật điểm đánh giá trung bình của sản phẩm
-        updateProductAverageRating(existingReview.getProduct().getId());
-
-        return updatedReview;
+        return reviewRepository.save(existingReview);
     }
 
     @Override
@@ -112,13 +227,11 @@ public class ReviewServiceImpl implements ReviewService {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new IllegalArgumentException("Review not found"));
 
-        UUID productId = review.getProduct().getId();
-
-        // Xóa review (cascade sẽ xóa luôn ảnh)
-        reviewRepository.delete(review);
-
-        // Cập nhật điểm đánh giá trung bình của sản phẩm
-        updateProductAverageRating(productId);
+        // Soft delete - hide instead of hard delete
+        review.setStatus(ReviewStatus.HIDDEN);
+        review.setVisible(false);
+        review.setUpdatedAt(Timestamp.from(Instant.now()));
+        reviewRepository.save(review);
     }
 
     @Override
@@ -129,33 +242,18 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Review> getReviewsByProduct(UUID productId) {
-        // #region agent log
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_13\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"ReviewServiceImpl.java:132\",\"message\":\"getReviewsByProduct entry\",\"data\":{\"productId\":\"" + productId + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
-            fw.close();
-        } catch (Exception ex) {}
-        // #endregion
+    public List<Review> getApprovedReviewsByProduct(UUID productId) {
         Product product = productRepository.findById(productId).orElse(null);
-        // #region agent log
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_14\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"ReviewServiceImpl.java:134\",\"message\":\"Product lookup\",\"data\":{\"productFound\":" + (product != null) + "},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
-            fw.close();
-        } catch (Exception ex) {}
-        // #endregion
         if (product == null) return List.of();
+        return reviewRepository.findByProductAndStatusOrderByCreatedAtDesc(product, ReviewStatus.APPROVED);
+    }
 
-        List<Review> reviews = reviewRepository.findByProductOrderByCreatedAtDesc(product);
-        // #region agent log
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_15\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"ReviewServiceImpl.java:137\",\"message\":\"Reviews fetched from DB\",\"data\":{\"reviewCount\":\"" + (reviews != null ? reviews.size() : 0) + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
-            fw.close();
-        } catch (Exception ex) {}
-        // #endregion
-        return reviews;
+    @Override
+    @Transactional(readOnly = true)
+    public List<Review> getReviewsByProduct(UUID productId) {
+        Product product = productRepository.findById(productId).orElse(null);
+        if (product == null) return List.of();
+        return reviewRepository.findByProductOrderByCreatedAtDesc(product);
     }
 
     @Override
@@ -163,7 +261,6 @@ public class ReviewServiceImpl implements ReviewService {
     public List<Review> getReviewsByCustomer(UUID customerId) {
         Customer customer = customerRepository.findById(customerId).orElse(null);
         if (customer == null) return List.of();
-
         return reviewRepository.findByCustomerOrderByCreatedAtDesc(customer);
     }
 
@@ -172,55 +269,232 @@ public class ReviewServiceImpl implements ReviewService {
     public Review getReviewByOrderItem(UUID orderItemId) {
         OrderItem orderItem = orderItemRepository.findById(orderItemId).orElse(null);
         if (orderItem == null) return null;
-
         return reviewRepository.findByOrderItem(orderItem);
     }
 
     @Override
     @Transactional(readOnly = true)
+    public Map<String, Object> checkEligibleForReview(UUID customerId, UUID productId) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        
+        Customer customer = customerRepository.findById(customerId).orElse(null);
+        Product product = productRepository.findById(productId).orElse(null);
+        
+        result.put("eligible", false);
+        result.put("reason", "");
+        result.put("orderItemId", null);
+        result.put("hasReviewed", false);
+
+        if (customer == null || product == null) {
+            result.put("reason", "Invalid customer or product");
+            return result;
+        }
+
+        // NOTE: We no longer check by product - allows re-reviewing on new purchases
+        // Only check for verified purchase (completed order with this product)
+        List<OrderItem> eligibleItems = getEligibleOrderItems(customer.getId(), product.getId());
+        if (eligibleItems.isEmpty()) {
+            result.put("reason", "You need to purchase this product before reviewing");
+            return result;
+        }
+
+        // Get the most recent eligible order item
+        OrderItem latestItem = eligibleItems.get(0);
+        result.put("eligible", true);
+        result.put("orderItemId", latestItem.getId().toString());
+        result.put("reason", "You can review this product");
+        
+        return result;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Double getAverageRating(UUID productId) {
-        // #region agent log
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_16\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"ReviewServiceImpl.java:159\",\"message\":\"getAverageRating entry\",\"data\":{\"productId\":\"" + productId + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"F\"}\n");
-            fw.close();
-        } catch (Exception ex) {}
-        // #endregion
         Product product = productRepository.findById(productId).orElse(null);
         if (product == null) return 0.0;
-
         Double avg = reviewRepository.findAverageRatingByProduct(product);
-        // #region agent log
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_17\",\"timestamp\":" + System.currentTimeMillis() + ",\"location\":\"ReviewServiceImpl.java:164\",\"message\":\"Average rating calculated\",\"data\":{\"averageRating\":\"" + (avg != null ? avg : "null") + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"F\"}\n");
-            fw.close();
-        } catch (Exception ex) {}
-        // #endregion
-        return avg != null ? avg : 0.0;
+        return avg != null ? Math.round(avg * 10) / 10.0 : 0.0;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Long countReviews(UUID productId) {
+    public Long countApprovedReviews(UUID productId) {
         Product product = productRepository.findById(productId).orElse(null);
         if (product == null) return 0L;
-
-        return reviewRepository.countByProduct(product);
+        return reviewRepository.countByProductAndStatusAndVisibleTrue(product, ReviewStatus.APPROVED);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public boolean hasCustomerReviewedProduct(UUID customerId, UUID productId, UUID orderItemId) {
-        OrderItem orderItem = orderItemRepository.findById(orderItemId).orElse(null);
-        if (orderItem == null) return false;
+    public Map<Integer, Long> getStarDistribution(UUID productId) {
+        Product product = productRepository.findById(productId).orElse(null);
+        if (product == null) return new LinkedHashMap<>();
 
-        Review existingReview = reviewRepository.findByOrderItem(orderItem);
-        return existingReview != null;
+        List<Object[]> results = reviewRepository.countByRatingGroupByProduct(product);
+        Map<Integer, Long> distribution = new LinkedHashMap<>();
+        
+        // Initialize all stars with 0
+        for (int i = 1; i <= 5; i++) {
+            distribution.put(i, 0L);
+        }
+        
+        // Fill actual values
+        for (Object[] row : results) {
+            Integer rating = (Integer) row[0];
+            Long count = (Long) row[1];
+            if (rating != null && rating >= 1 && rating <= 5) {
+                distribution.put(rating, count);
+            }
+        }
+        
+        return distribution;
     }
 
-    private void updateProductAverageRating(UUID productId) {
-        // Có thể implement logic cập nhật average rating trong Product entity
-        // Hoặc có thể để trigger tự động khi cần
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> getReviewSummary(UUID productId) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        
+        Double averageRating = getAverageRating(productId);
+        Long totalReviews = countApprovedReviews(productId);
+        Map<Integer, Long> distribution = getStarDistribution(productId);
+        
+        summary.put("averageRating", averageRating);
+        summary.put("totalReviews", totalReviews);
+        summary.put("starDistribution", distribution);
+        summary.put("percentage5Star", calculatePercentage(distribution.get(5), totalReviews));
+        summary.put("percentage4Star", calculatePercentage(distribution.get(4), totalReviews));
+        summary.put("percentage3Star", calculatePercentage(distribution.get(3), totalReviews));
+        summary.put("percentage2Star", calculatePercentage(distribution.get(2), totalReviews));
+        summary.put("percentage1Star", calculatePercentage(distribution.get(1), totalReviews));
+        
+        return summary;
+    }
+
+    @Override
+    public ReviewReport reportReview(UUID reviewId, UUID reporterId, ReviewReport.ReportReason reason, String note) throws Exception {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new IllegalArgumentException("Review not found"));
+        
+        Customer reporter = customerRepository.findById(reporterId)
+                .orElseThrow(() -> new IllegalArgumentException("Reporter not found"));
+        
+        // Check if already reported
+        Optional<ReviewReport> existing = reviewReportRepository.findByReviewIdAndReporterId(reviewId, reporterId);
+        if (existing.isPresent()) {
+            throw new IllegalArgumentException("You have already reported this review");
+        }
+        
+        ReviewReport report = new ReviewReport();
+        report.setReview(review);
+        report.setReporter(reporter);
+        report.setReason(reason);
+        report.setNote(note);
+        report.setStatus(ReviewReport.ReportStatus.PENDING);
+        
+        ReviewReport saved = reviewReportRepository.save(report);
+        
+        // Increment report count
+        incrementReportCount(reviewId);
+        
+        return saved;
+    }
+
+    @Override
+    public Review updateReviewStatus(UUID reviewId, ReviewStatus status, String note, String moderator) throws Exception {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new IllegalArgumentException("Review not found"));
+        
+        review.setStatus(status);
+        review.setModeratedBy(moderator);
+        review.setModeratedAt(new Timestamp(System.currentTimeMillis()));
+        review.setModerationNote(note);
+        
+        // Set visible based on status
+        review.setVisible(status == ReviewStatus.APPROVED);
+        
+        return reviewRepository.save(review);
+    }
+
+    @Override
+    public void replyToReview(UUID reviewId, String content, String authorName, String authorRole) throws Exception {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new IllegalArgumentException("Review not found"));
+        
+        ReviewReply reply = new ReviewReply();
+        reply.setReview(review);
+        reply.setContent(content);
+        reply.setAuthorName(authorName);
+        reply.setAuthorRole(authorRole);
+        reply.setAuthorId(authorName);
+        reply.setCreatedAt(new Timestamp(System.currentTimeMillis()));
+        
+        // Save through entity relationship
+        review.getReplies().add(reply);
+        reviewRepository.save(review);
+    }
+
+    @Override
+    public void incrementReportCount(UUID reviewId) {
+        Review review = reviewRepository.findById(reviewId).orElse(null);
+        if (review != null) {
+            review.setReportCount(review.getReportCount() + 1);
+            reviewRepository.save(review);
+        }
+    }
+
+    @Override
+    public void incrementHelpfulCount(UUID reviewId) {
+        Review review = reviewRepository.findById(reviewId).orElse(null);
+        if (review != null) {
+            review.setHelpfulCount(review.getHelpfulCount() + 1);
+            reviewRepository.save(review);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Review> getReviewsByStatus(ReviewStatus status) {
+        return reviewRepository.findByStatus(status, org.springframework.data.domain.PageRequest.of(0, 1000)).getContent();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Review> getMostReportedReviews(int limit) {
+        return reviewRepository.findMostReportedReviews(
+            org.springframework.data.domain.PageRequest.of(0, limit)
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Review> getAllReviews() {
+        return reviewRepository.findAll();
+    }
+
+    // Private helper method
+    private List<OrderItem> getEligibleOrderItems(UUID customerId, UUID productId) {
+        Product product = productRepository.findById(productId).orElse(null);
+        if (product == null) return List.of();
+        
+        List<OrderItem> items = orderItemRepository.findByProduct(product);
+        
+        return items.stream()
+                .filter(item -> item.getOrder() != null)
+                .filter(item -> item.getOrder().getOrderStatus() != null)
+                .filter(item -> {
+                    String statusName = item.getOrder().getOrderStatus().getStatusName();
+                    return "Delivered".equalsIgnoreCase(statusName) || 
+                           "Completed".equalsIgnoreCase(statusName);
+                })
+                .filter(item -> item.getOrder().getCustomer() != null)
+                .filter(item -> item.getOrder().getCustomer().getId().equals(customerId))
+                .sorted((a, b) -> b.getOrder().getCreated_at().compareTo(a.getOrder().getCreated_at()))
+                .collect(Collectors.toList());
+    }
+
+    private String calculatePercentage(Long count, Long total) {
+        if (total == 0 || count == 0) return "0%";
+        return String.format("%.1f%%", (count * 100.0 / total));
     }
 }

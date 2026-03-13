@@ -4,6 +4,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
+
+import com.nguyenviethien.exercise201.DTO.StaffAccountDto;
+import com.nguyenviethien.exercise201.entity.StaffAccount;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
@@ -43,8 +47,11 @@ public class StaffAccountController {
 
     //
     @GetMapping
-    public ResponseEntity<List<StaffAccount>> getAllStaffAccounts() {
-        return ResponseEntity.ok(staffAccountService.findAll());
+    public ResponseEntity<List<StaffAccountDto>> getAllStaffAccounts() {
+        List<StaffAccountDto> staffDtos = staffAccountService.findAll().stream()
+                .map(StaffAccountDto::new)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(staffDtos);
     }
 
     @GetMapping("/{id}")

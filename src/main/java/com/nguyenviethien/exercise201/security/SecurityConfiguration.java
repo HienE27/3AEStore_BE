@@ -71,6 +71,10 @@ public class SecurityConfiguration {
                     .requestMatchers(HttpMethod.DELETE, "/api/news/**").permitAll()
                     .requestMatchers(HttpMethod.OPTIONS, "/api/news/**").permitAll()
                 
+                // Admin API endpoints - allow OPTIONS for CORS preflight
+                    .requestMatchers(HttpMethod.OPTIONS, "/api/admin/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/admin/**").permitAll()
+                
                 // Allow OAuth2 endpoints
                     .requestMatchers("/oauth2/**").permitAll()
                     .requestMatchers("/login/oauth2/**").permitAll()

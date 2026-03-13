@@ -1,0 +1,202 @@
+/* Dark overrides for vendor/public CSS — loaded before app but uses !important to ensure precedence where needed */
+[data-theme="dark"],
+.dark {
+  --vendor-bg-card: #1f2937;
+  --vendor-border: #374151;
+  --vendor-text: #e5e7eb;
+  --vendor-muted: #9ca3af;
+}
+
+/* Generic vendor card/panel overrides */
+[data-theme="dark"] .panel,
+.dark .panel,
+[data-theme="dark"] .panel-body,
+.dark .panel-body,
+[data-theme="dark"] .widget,
+.dark .widget,
+[data-theme="dark"] .card,
+.dark .card,
+[data-theme="dark"] .box,
+.dark .box {
+  background: var(--vendor-bg-card) !important;
+  border-color: var(--vendor-border) !important;
+  color: var(--vendor-text) !important;
+  box-shadow: 0 8px 25px rgba(2,6,23,0.45) !important;
+}
+
+/* Catch bright utility backgrounds */
+[data-theme="dark"] .bg-white,
+.dark .bg-white,
+[data-theme="dark"] [class*="bg-white/"],
+.dark [class*="bg-white/"],
+[data-theme="dark"] [style*="background: #ffffff"],
+.dark [style*="background: #ffffff"],
+[data-theme="dark"] [style*="background: white"],
+.dark [style*="background: white"] {
+  background: var(--vendor-bg-card) !important;
+  border-color: var(--vendor-border) !important;
+  color: var(--vendor-text) !important;
+  box-shadow: none !important;
+}
+
+/* Forms, inputs inside vendor components */
+[data-theme="dark"] input,
+.dark input,
+[data-theme="dark"] textarea,
+.dark textarea,
+[data-theme="dark"] select,
+.dark select {
+  background: #0b1220 !important;
+  border-color: #4b5563 !important;
+  color: var(--vendor-text) !important;
+}
+
+/* Dropdowns, modals */
+[data-theme="dark"] .dropdown-menu,
+.dark .dropdown-menu,
+[data-theme="dark"] .modal-content,
+.dark .modal-content {
+  background: var(--vendor-bg-card) !important;
+  border-color: var(--vendor-border) !important;
+  color: var(--vendor-text) !important;
+}
+
+/* Small badges / pills */
+[data-theme="dark"] .badge,
+.dark .badge,
+[data-theme="dark"] .label,
+.dark .label {
+  background: rgba(255,255,255,0.03) !important;
+  color: var(--vendor-text) !important;
+  border: 1px solid rgba(255,255,255,0.03) !important;
+}
+
+/* Specific utility overrides commonly used in plugins */
+[data-theme="dark"] .bg-blue-50,
+.dark .bg-blue-50,
+[data-theme="dark"] .bg-green-50,
+.dark .bg-green-50,
+[data-theme="dark"] .bg-red-50,
+.dark .bg-red-50 {
+  background: rgba(255,255,255,0.03) !important;
+  color: var(--vendor-text) !important;
+  border-color: var(--vendor-border) !important;
+}
+
+/* Inline style catches (vendor may inject inline backgrounds) */
+[data-theme="dark"] [style*="background: rgb(255, 255, 255)"],
+.dark [style*="background: rgb(255, 255, 255)"] {
+  background: var(--vendor-bg-card) !important;
+  color: var(--vendor-text) !important;
+  border-color: var(--vendor-border) !important;
+}
+
+/* Dropzone (file upload) plugin */
+[data-theme="dark"] .dropzone,
+.dark .dropzone {
+  background: var(--vendor-bg-card) !important;
+  border-color: var(--vendor-border) !important;
+  color: var(--vendor-text) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+[data-theme="dark"] .dropzone .dz-message,
+.dark .dropzone .dz-message {
+  color: var(--vendor-muted) !important;
+}
+
+[data-theme="dark"] .dropzone .dz-preview,
+.dark .dropzone .dz-preview {
+  background: rgba(255,255,255,0.02) !important;
+  border-color: rgba(255,255,255,0.03) !important;
+}
+
+[data-theme="dark"] .dropzone .dz-preview.dz-image-preview,
+.dark .dropzone .dz-preview.dz-image-preview {
+  background: rgba(255,255,255,0.02) !important;
+}
+
+[data-theme="dark"] .dropzone .dz-details,
+.dark .dropzone .dz-details {
+  color: var(--vendor-muted) !important;
+}
+
+/* Additional vendor/plugin catches */
+[data-theme="dark"] .panel-body,
+.dark .panel-body,
+[data-theme="dark"] .panel,
+.dark .panel,
+[data-theme="dark"] .widget,
+.dark .widget,
+[data-theme="dark"] .kt-card,
+.dark .kt-card,
+[data-theme="dark"] .card,
+.dark .card {
+  background: var(--vendor-bg-card) !important;
+  border-color: var(--vendor-border) !important;
+  color: var(--vendor-text) !important;
+  box-shadow: 0 10px 30px rgba(2,6,23,0.45) !important;
+}
+
+/* Catch common plugin / theme utility classes */
+[data-theme="dark"] .bg-sky-50,
+.dark .bg-sky-50,
+[data-theme="dark"] .bg-blue-50,
+.dark .bg-blue-50,
+[data-theme="dark"] .bg-gradient-to-r,
+.dark .bg-gradient-to-r,
+[data-theme="dark"] [class*="from-sky-"],
+.dark [class*="from-sky-"],
+[data-theme="dark"] [class*="to-blue-"],
+.dark [class*="to-blue-"] {
+  background-image: none !important;
+  background-color: rgba(255,255,255,0.02) !important;
+  color: var(--vendor-text) !important;
+  border-color: var(--vendor-border) !important;
+  box-shadow: none !important;
+}
+
+/* Alerts, toasts, and notifications */
+[data-theme="dark"] .alert,
+.dark .alert,
+[data-theme="dark"] .toast,
+.dark .toast,
+[data-theme="dark"] .notification,
+.dark .notification {
+  background: rgba(255,255,255,0.02) !important;
+  color: var(--vendor-text) !important;
+  border-color: rgba(255,255,255,0.03) !important;
+  box-shadow: 0 6px 18px rgba(2,6,23,0.45) !important;
+}
+
+/* CKEditor / TinyMCE editable area */
+[data-theme="dark"] .mce-content-body,
+.dark .mce-content-body,
+[data-theme="dark"] .tox .tox-editor-container,
+.dark .tox .tox-editor-container,
+[data-theme="dark"] .ck-editor__editable,
+.dark .ck-editor__editable {
+  background: var(--vendor-bg-card) !important;
+  color: var(--vendor-text) !important;
+  border-color: var(--vendor-border) !important;
+}
+
+/* Fix inline background-image gradients injected by plugins */
+[data-theme="dark"] [style*="background-image"],
+.dark [style*="background-image"] {
+  background-image: none !important;
+}
+
+/* Generic catch-all for any white RGB/hex inline background */
+[data-theme="dark"] [style*="background: rgb(255, 255, 255)"],
+.dark [style*="background: rgb(255,255,255)"],
+[data-theme="dark"] [style*="background:#fff"],
+.dark [style*="background:#fff"],
+[data-theme="dark"] [style*="background:#ffffff"],
+.dark [style*="background:#ffffff"] {
+  background: var(--vendor-bg-card) !important;
+  color: var(--vendor-text) !important;
+  border-color: var(--vendor-border) !important;
+}
+
+

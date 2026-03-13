@@ -41,7 +41,8 @@ public class JwtService {
         Map<String, Object> claims = new HashMap<>();
         StaffAccount staffAccount = staffAccountRepository.findByUser_name(username);
         if (staffAccount != null) {
-            claims.put("id", staffAccount.getId());
+            // store id as String to ensure consistent extraction
+            if (staffAccount.getId() != null) claims.put("id", staffAccount.getId().toString());
             claims.put("lastName", staffAccount.getLast_name());
             claims.put("Active", staffAccount.isActive());
             claims.put("userType", "STAFF"); // Thêm để phân biệt loại user
@@ -139,7 +140,21 @@ public class JwtService {
     }
 
     public UUID extractId(String token) {
-        return extractClaims(token, claims -> UUID.fromString(claims.get("id", String.class)));
+        return extractClaims(token, claims -> {
+            Object idObj = claims.get("id");
+            if (idObj == null) return null;
+            try {
+                if (idObj instanceof String) {
+                    return UUID.fromString((String) idObj);
+                } else if (idObj instanceof UUID) {
+                    return (UUID) idObj;
+                } else {
+                    return UUID.fromString(idObj.toString());
+                }
+            } catch (Exception e) {
+                return null;
+            }
+        });
     }
 
     // Method để lấy user type từ token

@@ -72,8 +72,6 @@ public class ReviewImageServiceImpl implements ReviewImageService {
             reviewImage.setImageUrl("/uploads/reviews/" + uniqueFilename); // URL tương đối
             reviewImage.setImageSize(file.getSize());
             reviewImage.setSortOrder(maxOrder + i + 1);
-            // set legacy 'url' column value if DB expects it
-            reviewImage.setUrl(reviewImage.getImageUrl());
 
             // Lưu vào database
             ReviewImage savedImage = reviewImageRepository.save(reviewImage);

@@ -22,11 +22,12 @@ public class StaffAccount {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "role_id", nullable = false)
     @JsonIgnore
-    // @JsonProperty("role")
     private Role role;
+    
     @Column(nullable = true)
     private String first_name;
     @Column(nullable = true)
@@ -36,6 +37,7 @@ public class StaffAccount {
     @Column(nullable = true)
     private String email;
     @Column(nullable = true)
+    @JsonIgnore
     private String password_hash;
     @Column(nullable = true)
     private String user_name;
@@ -49,17 +51,23 @@ public class StaffAccount {
     private Date created_at;
     @Column(nullable = false)
     private Date updated_at;
+    
+    // Self-referencing relationships - need @JsonIgnore to avoid circular reference
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", referencedColumnName = "id", insertable = false, updatable = false)
     @JsonIgnore
     private StaffAccount createdBy;
+    
     @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<StaffAccount> subCreatedBy;
+    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "updated_by", referencedColumnName = "id", insertable = false, updatable = false)
     @JsonIgnore
     private StaffAccount updatedBy;
-    @OneToMany(mappedBy = "updatedBy", cascade = CascadeType.ALL)
-    private List<StaffAccount> subUpdatedBy;
     
+    @OneToMany(mappedBy = "updatedBy", cascade = CascadeType.ALL)
+    @JsonIgnore
+    private List<StaffAccount> subUpdatedBy;
 }
