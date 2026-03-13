@@ -1,114 +1,57 @@
 package com.nguyenviethien.exercise201.service.impl;
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.regex.Pattern;
-
+import com.fasterxml.jackson.databind.JsonNode;
+import com.nguyenviethien.exercise201.entity.*;
+import com.nguyenviethien.exercise201.repository.*;
+import com.nguyenviethien.exercise201.service.ProductService;
+import com.nguyenviethien.exercise201.service.AIGenerateDescriptionService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.nguyenviethien.exercise201.DTO.ProductDetailsDTO;
-import com.nguyenviethien.exercise201.entity.Category;
-import com.nguyenviethien.exercise201.entity.Gallery;
-import com.nguyenviethien.exercise201.entity.OrderItem;
-import com.nguyenviethien.exercise201.entity.Product;
-import com.nguyenviethien.exercise201.entity.ProductCategory;
-import com.nguyenviethien.exercise201.entity.StaffAccount;
-import com.nguyenviethien.exercise201.repository.CategoryRepository;
-import com.nguyenviethien.exercise201.repository.GalleryRepository;
-import com.nguyenviethien.exercise201.repository.OrderItemRepository;
-import com.nguyenviethien.exercise201.repository.ProductCategoryRepository;
-import com.nguyenviethien.exercise201.repository.ProductRepository;
-import com.nguyenviethien.exercise201.repository.StaffAccountRepository;
-import com.nguyenviethien.exercise201.service.ProductService;
-import com.nguyenviethien.exercise201.service.AIGenerateDescriptionService;
-import com.fasterxml.jackson.databind.JsonNode;
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class ProductServiceImpl implements ProductService {
 
-    @Autowired
-    private OrderItemRepository orderItemRepository;
+    private static final Logger log = LoggerFactory.getLogger(ProductServiceImpl.class);
+
+    private final OrderItemRepository orderItemRepository;
+    private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
+    private final StaffAccountRepository staffAccountRepository;
+    private final GalleryRepository galleryRepository;
+    private final ProductCategoryRepository productCategoryRepository;
+    private final AIGenerateDescriptionService aiGenerateDescriptionService;
 
     @Autowired
-    private ProductRepository productRepository;
-
-    @Autowired
-    private CategoryRepository categoryRepository;
-
-    @Autowired
-    private StaffAccountRepository staffAccountRepository;
-
-    @Autowired
-    private GalleryRepository galleryRepository;
-
-    @Autowired
-    private ProductCategoryRepository productCategoryRepository;
-
-    @Autowired
-    private AIGenerateDescriptionService aiGenerateDescriptionService;
+    public ProductServiceImpl(
+            OrderItemRepository orderItemRepository,
+            ProductRepository productRepository,
+            CategoryRepository categoryRepository,
+            StaffAccountRepository staffAccountRepository,
+            GalleryRepository galleryRepository,
+            ProductCategoryRepository productCategoryRepository,
+            AIGenerateDescriptionService aiGenerateDescriptionService) {
+        this.orderItemRepository = orderItemRepository;
+        this.productRepository = productRepository;
+        this.categoryRepository = categoryRepository;
+        this.staffAccountRepository = staffAccountRepository;
+        this.galleryRepository = galleryRepository;
+        this.productCategoryRepository = productCategoryRepository;
+        this.aiGenerateDescriptionService = aiGenerateDescriptionService;
+    }
 
     @Override
     public List<Product> getAllProducts() {
-        // #region agent log
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-            fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_5\",\"timestamp\":" + System.currentTimeMillis()
-                    + ",\"location\":\"ProductServiceImpl.java:60\",\"message\":\"getAllProducts entry\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
-            fw.close();
-        } catch (java.io.IOException ex) {
-        }
-        // #endregion
-        try {
-            // #region agent log
-            try {
-                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_6\",\"timestamp\":"
-                        + System.currentTimeMillis()
-                        + ",\"location\":\"ProductServiceImpl.java:62\",\"message\":\"Before calling productRepository.findAllWithRelationships\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
-                fw.close();
-            } catch (java.io.IOException ex) {
-            }
-            // #endregion
-            List<Product> result = productRepository.findAllWithRelationships();
-            // #region agent log
-            try {
-                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_7\",\"timestamp\":"
-                        + System.currentTimeMillis()
-                        + ",\"location\":\"ProductServiceImpl.java:63\",\"message\":\"After calling productRepository.findAllWithRelationships\",\"data\":{\"productCount\":\""
-                        + (result != null ? result.size() : 0)
-                        + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n");
-                fw.close();
-            } catch (java.io.IOException ex) {
-            }
-            // #endregion
-            return result;
-        } catch (Exception e) {
-            // #region agent log
-            try {
-                java.io.FileWriter fw = new java.io.FileWriter("d:\\DAT5\\.cursor\\debug.log", true);
-                fw.write("{\"id\":\"log_" + System.currentTimeMillis() + "_8\",\"timestamp\":"
-                        + System.currentTimeMillis()
-                        + ",\"location\":\"ProductServiceImpl.java:64\",\"message\":\"Exception in getAllProducts\",\"data\":{\"error\":\""
-                        + e.getClass().getName() + "\",\"message\":\"" + e.getMessage() + "\",\"stackTrace\":\""
-                        + java.util.Arrays.toString(e.getStackTrace()).replace("\"", "'")
-                        + "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}\n");
-                fw.close();
-            } catch (java.io.IOException ex) {
-            }
-            // #endregion
-            throw e;
-        }
+        log.debug("Fetching all products");
+        return productRepository.findAllWithRelationships();
     }
 
     @Override
@@ -124,36 +67,25 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ResponseEntity<?> save(JsonNode productJson, UUID staffId) {
-        try {
-            System.out.println("🚀 =================================");
-            System.out.println("📥 Starting product creation process");
-            System.out.println("👤 Staff ID: " + staffId);
-            System.out.println("📦 Raw JSON: " + productJson.toString());
-            System.out.println("🚀 =================================");
+        log.info("Starting product creation process for staff: {}", staffId);
 
-            // Validate staff exists
+        try {
             StaffAccount staff = staffAccountRepository.findById(staffId)
                     .orElseThrow(() -> new RuntimeException("Staff not found with ID: " + staffId));
-            System.out.println("✅ Staff found: " + staff.getId());
 
-            // ✅ SỬA ĐỔI: Tạo Product object manually thay vì dùng objectMapper.treeToValue
             Product product = new Product();
 
-            // Basic fields
-            // ✅ AUTO-GENERATE SLUG nếu không được cung cấp hoặc rỗng
             String slug = productJson.has("slug") && !productJson.get("slug").asText().trim().isEmpty()
                     ? productJson.get("slug").asText().trim()
                     : generateSlug(productJson.get("productName").asText(), null);
             product.setSlug(slug);
             product.setProductName(productJson.get("productName").asText());
 
-            // ✅ AUTO-GENERATE SKU nếu không được cung cấp hoặc rỗng
             String sku = productJson.has("sku") && !productJson.get("sku").asText().trim().isEmpty()
                     ? productJson.get("sku").asText().trim()
                     : generateSku(productJson.get("productName").asText(), null);
             product.setSku(sku);
 
-            // ✅ QUAN TRỌNG: Handle BigDecimal properly
             product.setSalePrice(new BigDecimal(productJson.get("salePrice").asDouble()));
             product.setComparePrice(new BigDecimal(productJson.get("comparePrice").asDouble()));
             product.setBuyingPrice(new BigDecimal(productJson.get("buyingPrice").asDouble()));
@@ -162,18 +94,15 @@ public class ProductServiceImpl implements ProductService {
             product.setShortDescription(
                     productJson.has("shortDescription") ? productJson.get("shortDescription").asText() : "");
 
-            // ✅ Tự động generate productDescription nếu không có hoặc rỗng
             String productDescription = productJson.has("productDescription")
                     ? productJson.get("productDescription").asText()
                     : "";
             if (productDescription == null || productDescription.trim().isEmpty()) {
-                System.out.println("🤖 Auto-generating description for product: " + product.getProductName());
+                log.info("Auto-generating description for product: {}", product.getProductName());
                 productDescription = aiGenerateDescriptionService.generateDescription(product.getProductName());
-                System.out.println("✅ Description generated successfully");
             }
             product.setProductDescription(productDescription);
 
-            // ✅ QUAN TRỌNG: Handle enum properly - entity sử dụng lowercase
             String productTypeStr = productJson.get("productType").asText().toLowerCase();
             product.setProductType(Product.ProductType.valueOf(productTypeStr));
 
@@ -181,18 +110,13 @@ public class ProductServiceImpl implements ProductService {
             product.setDisableOutOfStock(productJson.get("disableOutOfStock").asBoolean());
             product.setNote(productJson.has("note") ? productJson.get("note").asText() : "");
 
-            // Set audit fields
             product.setCreatedBy(staff);
             product.setUpdatedBy(staff);
             product.setCreatedAt(new Date());
             product.setUpdatedAt(new Date());
 
-            System.out.println("✅ Basic product fields set");
-
-            // ✅ SỬA ĐỔI: Handle categories properly
             List<ProductCategory> productCategoryList = new ArrayList<>();
             if (productJson.has("idCategories") && productJson.get("idCategories").isArray()) {
-                System.out.println("📋 Processing categories...");
                 for (JsonNode categoryIdNode : productJson.get("idCategories")) {
                     try {
                         String categoryIdStr = categoryIdNode.asText();
@@ -204,28 +128,20 @@ public class ProductServiceImpl implements ProductService {
                             productCategory.setCategory(categoryOpt.get());
                             productCategory.setProduct(product);
                             productCategoryList.add(productCategory);
-                            System.out.println("✅ Added category: " + categoryOpt.get().getCategoryName());
-                        } else {
-                            System.out.println("⚠️ Category not found: " + categoryId);
                         }
                     } catch (Exception e) {
-                        System.err.println("❌ Error processing category: " + e.getMessage());
+                        log.error("Error processing category: {}", e.getMessage());
                     }
                 }
             }
             product.setProductCategories(productCategoryList);
-            System.out.println("✅ Categories processed: " + productCategoryList.size());
 
-            // Save product first to get ID
             Product savedProduct = productRepository.save(product);
-            System.out.println("✅ Product saved with ID: " + savedProduct.getId());
+            log.info("Product saved with ID: {}", savedProduct.getId());
 
-            // ✅ SỬA ĐỔI: Handle images properly
             List<Gallery> galleryList = new ArrayList<>();
 
-            // Process thumbnail images
             if (productJson.has("images") && productJson.get("images").isArray()) {
-                System.out.println("🖼️ Processing thumbnail images...");
                 for (JsonNode imageNode : productJson.get("images")) {
                     String imageUrl = imageNode.asText();
                     if (imageUrl != null && !imageUrl.trim().isEmpty()) {
@@ -238,14 +154,11 @@ public class ProductServiceImpl implements ProductService {
                         gallery.setUpdatedAt(new Date());
                         galleryRepository.save(gallery);
                         galleryList.add(gallery);
-                        System.out.println("✅ Added thumbnail image");
                     }
                 }
             }
 
-            // Process gallery images
             if (productJson.has("imagePhus") && productJson.get("imagePhus").isArray()) {
-                System.out.println("🖼️ Processing gallery images...");
                 for (JsonNode imageNode : productJson.get("imagePhus")) {
                     String imageUrl = imageNode.asText();
                     if (imageUrl != null && !imageUrl.trim().isEmpty()) {
@@ -258,30 +171,24 @@ public class ProductServiceImpl implements ProductService {
                         gallery.setUpdatedAt(new Date());
                         galleryRepository.save(gallery);
                         galleryList.add(gallery);
-                        System.out.println("✅ Added gallery image");
                     }
                 }
             }
 
-            System.out.println("✅ Images processed: " + galleryList.size());
-
-            // Final save
             productRepository.save(savedProduct);
 
-            System.out.println("🎉 Product creation completed successfully!");
-            return ResponseEntity.ok().body(Map.of(
+            log.info("Product creation completed successfully: {}", savedProduct.getProductName());
+            return ResponseEntity.ok(Map.of(
                     "message", "Thành công!",
                     "productId", savedProduct.getId().toString(),
                     "productName", savedProduct.getProductName()));
 
         } catch (IllegalArgumentException e) {
-            System.err.println("❌ Validation error: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Validation error: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", "Dữ liệu không hợp lệ: " + e.getMessage()));
 
         } catch (Exception e) {
-            System.err.println("💥 Unexpected error: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Unexpected error during product creation: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Có lỗi xảy ra khi tạo sản phẩm: " + e.getMessage()));
         }
@@ -290,6 +197,8 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ResponseEntity<?> update(UUID productId, JsonNode productJson, UUID staffId) {
+        log.info("Starting product update for ID: {}", productId);
+
         try {
             Product existingProduct = productRepository.findById(productId)
                     .orElseThrow(() -> new RuntimeException("Product not found with ID: " + productId));
@@ -297,15 +206,12 @@ public class ProductServiceImpl implements ProductService {
             StaffAccount staff = staffAccountRepository.findById(staffId)
                     .orElseThrow(() -> new RuntimeException("Staff not found with ID: " + staffId));
 
-            // Update basic fields manually (similar to save method)
-            // ✅ AUTO-GENERATE SLUG nếu không được cung cấp hoặc rỗng
             String slug = productJson.has("slug") && !productJson.get("slug").asText().trim().isEmpty()
                     ? productJson.get("slug").asText().trim()
                     : generateSlug(productJson.get("productName").asText(), productId);
             existingProduct.setSlug(slug);
             existingProduct.setProductName(productJson.get("productName").asText());
 
-            // ✅ AUTO-GENERATE SKU nếu không được cung cấp hoặc rỗng
             String sku = productJson.has("sku") && !productJson.get("sku").asText().trim().isEmpty()
                     ? productJson.get("sku").asText().trim()
                     : generateSku(productJson.get("productName").asText(), productId);
@@ -317,14 +223,12 @@ public class ProductServiceImpl implements ProductService {
             existingProduct.setShortDescription(
                     productJson.has("shortDescription") ? productJson.get("shortDescription").asText() : "");
 
-            // ✅ Tự động generate productDescription nếu không có hoặc rỗng
             String productDescription = productJson.has("productDescription")
                     ? productJson.get("productDescription").asText()
                     : "";
             if (productDescription == null || productDescription.trim().isEmpty()) {
-                System.out.println("🤖 Auto-generating description for product: " + existingProduct.getProductName());
+                log.info("Auto-generating description for product: {}", existingProduct.getProductName());
                 productDescription = aiGenerateDescriptionService.generateDescription(existingProduct.getProductName());
-                System.out.println("✅ Description generated successfully");
             }
             existingProduct.setProductDescription(productDescription);
 
@@ -337,7 +241,6 @@ public class ProductServiceImpl implements ProductService {
             existingProduct.setUpdatedBy(staff);
             existingProduct.setUpdatedAt(new Date());
 
-            // Update categories
             productCategoryRepository.deleteAllByProductId(productId);
             List<ProductCategory> newCategories = new ArrayList<>();
             if (productJson.has("idCategories") && productJson.get("idCategories").isArray()) {
@@ -353,10 +256,8 @@ public class ProductServiceImpl implements ProductService {
             }
             existingProduct.setProductCategories(newCategories);
 
-            // Update images
             galleryRepository.deleteAllByProductId(productId);
 
-            // Add thumbnail images
             if (productJson.has("images") && productJson.get("images").isArray()) {
                 for (JsonNode imageNode : productJson.get("images")) {
                     String imageUrl = imageNode.asText();
@@ -373,7 +274,6 @@ public class ProductServiceImpl implements ProductService {
                 }
             }
 
-            // Add gallery images
             if (productJson.has("imagePhus") && productJson.get("imagePhus").isArray()) {
                 for (JsonNode imageNode : productJson.get("imagePhus")) {
                     String imageUrl = imageNode.asText();
@@ -391,10 +291,11 @@ public class ProductServiceImpl implements ProductService {
             }
 
             productRepository.save(existingProduct);
+            log.info("Product updated successfully: {}", productId);
             return ResponseEntity.ok(Map.of("message", "Cập nhật thành công!"));
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error updating product {}: {}", productId, e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", "Cập nhật thất bại: " + e.getMessage()));
         }
     }
@@ -402,33 +303,34 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ResponseEntity<?> deleteProduct(UUID productId) {
+        log.info("Deleting product: {}", productId);
+
         try {
             Product product = productRepository.findById(productId)
                     .orElseThrow(() -> new RuntimeException("Product not found with ID: " + productId));
 
-            // Check if product exists in orders
             List<OrderItem> orderItems = orderItemRepository.findByProduct(product);
             if (!orderItems.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(Map.of("error", "Không thể xóa sản phẩm vì còn tồn tại trong đơn hàng."));
             }
 
-            // Delete related data
             galleryRepository.deleteAllByProductId(productId);
             productCategoryRepository.deleteAllByProductId(productId);
 
-            // Delete product
             productRepository.delete(product);
 
+            log.info("Product deleted successfully: {}", productId);
             return ResponseEntity.ok(Map.of("message", "Sản phẩm đã được xóa thành công!"));
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error deleting product {}: {}", productId, e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", "Lỗi khi xóa sản phẩm: " + e.getMessage()));
         }
     }
 
-    public ProductDetailsDTO getProductDetails(UUID productId) {
+    @Override
+    public com.nguyenviethien.exercise201.DTO.ProductDetailsDTO getProductDetails(UUID productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
 
@@ -438,7 +340,7 @@ public class ProductServiceImpl implements ProductService {
                 .map(pc -> pc.getCategory().getCategoryName())
                 .collect(Collectors.toList());
 
-        ProductDetailsDTO productDTO = new ProductDetailsDTO();
+        com.nguyenviethien.exercise201.DTO.ProductDetailsDTO productDTO = new com.nguyenviethien.exercise201.DTO.ProductDetailsDTO();
         productDTO.setId(product.getId());
         productDTO.setProductName(product.getProductName());
         productDTO.setDescription(product.getProductDescription() != null ? product.getProductDescription() : "");
@@ -471,26 +373,18 @@ public class ProductServiceImpl implements ProductService {
         return productRepository.count();
     }
 
-    // ========== UTILITY METHODS FOR AUTO-GENERATING SLUG AND SKU ==========
-
-    /**
-     * Generate SEO-friendly slug from product name
-     */
     private String generateSlug(String productName, UUID existingProductId) {
         if (productName == null || productName.trim().isEmpty()) {
             return "product-" + System.currentTimeMillis();
         }
 
-        // Convert to lowercase and remove diacritics
         String normalized = normalizeVietnamese(productName.toLowerCase().trim());
 
-        // Replace spaces and special characters with hyphens
         String slug = normalized.replaceAll("[^a-z0-9\\s-]", "")
                                 .replaceAll("\\s+", "-")
                                 .replaceAll("-+", "-")
                                 .replaceAll("^-|-$", "");
 
-        // Add unique suffix if slug exists
         String baseSlug = slug;
         int counter = 1;
         while (isSlugExists(baseSlug, existingProductId)) {
@@ -501,24 +395,18 @@ public class ProductServiceImpl implements ProductService {
         return baseSlug;
     }
 
-    /**
-     * Generate unique SKU
-     */
     private String generateSku(String productName, UUID existingProductId) {
-        // Generate SKU prefix from product name (first 3 characters, uppercase)
         String prefix = "SKU";
         if (productName != null && !productName.trim().isEmpty()) {
             String normalized = normalizeVietnamese(productName.toUpperCase().replaceAll("[^A-Z0-9]", ""));
             prefix = normalized.length() >= 3 ? normalized.substring(0, 3) : normalized + "X";
         }
 
-        // Generate unique SKU with timestamp and random suffix
         String timestamp = String.valueOf(System.currentTimeMillis());
         String randomSuffix = String.valueOf((int) (Math.random() * 1000));
 
         String baseSku = prefix + "-" + timestamp.substring(timestamp.length() - 6) + "-" + randomSuffix;
 
-        // Ensure SKU is unique
         String finalSku = baseSku;
         int counter = 1;
         while (isSkuExists(finalSku, existingProductId)) {
@@ -529,9 +417,6 @@ public class ProductServiceImpl implements ProductService {
         return finalSku;
     }
 
-    /**
-     * Check if slug already exists
-     */
     private boolean isSlugExists(String slug, UUID excludeProductId) {
         if (slug == null) return false;
         Optional<Product> existing = productRepository.findBySlug(slug);
@@ -540,9 +425,6 @@ public class ProductServiceImpl implements ProductService {
         return true;
     }
 
-    /**
-     * Check if SKU already exists
-     */
     private boolean isSkuExists(String sku, UUID excludeProductId) {
         if (sku == null) return false;
         Optional<Product> existing = productRepository.findBySku(sku);
@@ -551,9 +433,6 @@ public class ProductServiceImpl implements ProductService {
         return true;
     }
 
-    /**
-     * Remove Vietnamese diacritics
-     */
     private String normalizeVietnamese(String input) {
         if (input == null) return "";
         return input.replaceAll("[àáảãạâầấẩẫậăằắẳẵặ]", "a")

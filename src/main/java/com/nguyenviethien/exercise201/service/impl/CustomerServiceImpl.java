@@ -1,10 +1,12 @@
 package com.nguyenviethien.exercise201.service.impl;
 
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
+import com.nguyenviethien.exercise201.entity.Customer;
+import com.nguyenviethien.exercise201.repository.CustomerRepository;
+import com.nguyenviethien.exercise201.repository.OrderItemRepository;
+import com.nguyenviethien.exercise201.repository.OrderRepository;
+import com.nguyenviethien.exercise201.service.CustomerService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,35 +16,39 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.nguyenviethien.exercise201.entity.Customer;
-import com.nguyenviethien.exercise201.entity.Order;
-import com.nguyenviethien.exercise201.repository.CustomerRepository;
-import com.nguyenviethien.exercise201.repository.OrderItemRepository;
-import com.nguyenviethien.exercise201.repository.OrderRepository;
-import com.nguyenviethien.exercise201.service.CustomerService;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @Transactional
 public class CustomerServiceImpl implements CustomerService {
 
-    @Autowired
-    private CustomerRepository customerRepository;
+    private static final Logger log = LoggerFactory.getLogger(CustomerServiceImpl.class);
+
+    private final CustomerRepository customerRepository;
+    private final BCryptPasswordEncoder passwordEncoder;
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final JavaMailSender mailSender;
 
     @Autowired
-    private BCryptPasswordEncoder passwordEncoder;
-
-    @Autowired
-    private OrderRepository orderRepository;
-
-    @Autowired
-    private OrderItemRepository orderItemRepository;
-
-    @Autowired
-    private JavaMailSender mailSender;
+    public CustomerServiceImpl(
+            CustomerRepository customerRepository,
+            BCryptPasswordEncoder passwordEncoder,
+            OrderRepository orderRepository,
+            OrderItemRepository orderItemRepository,
+            JavaMailSender mailSender) {
+        this.customerRepository = customerRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.orderRepository = orderRepository;
+        this.orderItemRepository = orderItemRepository;
+        this.mailSender = mailSender;
+    }
 
     @Override
     public Page<Customer> findAll(Pageable pageable) {
-        //return customerRepository.findAll(pageable);
         return customerRepository.findAllActive(pageable);
     }
 
@@ -61,69 +67,55 @@ public class CustomerServiceImpl implements CustomerService {
         return customerRepository.findByEmailContainingIgnoreCase(searchTerm);
     }
 
+    @Override
+    public Optional<Customer> findByEmailSingle(String email) {
+        return customerRepository.findByEmail(email);
+    }
 
     @Override
-public Optional<Customer> findByEmailSingle(String email) {
-    return customerRepository.findByEmail(email);
-}
-
-@Override
-public List<Customer> findByEmailContainingIgnoreCase(String email) {
-    return customerRepository.findByEmailContainingIgnoreCase(email);
-}
-
-
-  
-    
-
-@Override
-public Customer save(Customer customer) {
-    if (customer.getUser_name() == null || customer.getUser_name().isEmpty()) {
-        throw new IllegalArgumentException("Hãy nhập tên đăng nhập.");
-    }
-    if (customer.getFirst_name() == null || customer.getFirst_name().isEmpty()) {
-        throw new IllegalArgumentException("Hãy nhập firstName.");
-    }
-    if (customer.getLast_name() == null || customer.getLast_name().isEmpty()) {
-        throw new IllegalArgumentException("Hãy nhập lastName.");
-    }
-    if (customer.getEmail() == null || customer.getEmail().isEmpty()) {
-        throw new IllegalArgumentException("Hãy nhập email.");
-    }
-    if (customer.getPassword_hash() == null || customer.getPassword_hash().isEmpty()) {
-        throw new IllegalArgumentException("Hãy nhập password.");
+    public List<Customer> findByEmailContainingIgnoreCase(String email) {
+        return customerRepository.findByEmailContainingIgnoreCase(email);
     }
 
-    String encodePassword = passwordEncoder.encode(customer.getPassword_hash());
-    customer.setPassword_hash(encodePassword);
+    @Override
+    public Customer save(Customer customer) {
+        if (customer.getUser_name() == null || customer.getUser_name().isEmpty()) {
+            throw new IllegalArgumentException("Hãy nhập tên đăng nhập.");
+        }
+        if (customer.getFirst_name() == null || customer.getFirst_name().isEmpty()) {
+            throw new IllegalArgumentException("Hãy nhập firstName.");
+        }
+        if (customer.getLast_name() == null || customer.getLast_name().isEmpty()) {
+            throw new IllegalArgumentException("Hãy nhập lastName.");
+        }
+        if (customer.getEmail() == null || customer.getEmail().isEmpty()) {
+            throw new IllegalArgumentException("Hãy nhập email.");
+        }
+        if (customer.getPassword_hash() == null || customer.getPassword_hash().isEmpty()) {
+            throw new IllegalArgumentException("Hãy nhập password.");
+        }
 
-    customer.setActive(true);
-    // Không set registered_at và updated_at thủ công - để @CreationTimestamp và @UpdateTimestamp tự động xử lý
-    // customer.setRegistered_at(new Date()); // Removed - handled by @CreationTimestamp
-    // customer.setUpdated_at(new Date()); // Removed - handled by @UpdateTimestamp
+        String encodedPassword = passwordEncoder.encode(customer.getPassword_hash());
+        customer.setPassword_hash(encodedPassword);
 
-    // Mặc định khi tạo mới chưa kích hoạt, cần kích hoạt qua email
-    customer.setActivated(false);
-    customer.setActivationCode(null);
-    
-    // Đảm bảo deleted = false cho customer mới
-    if (customer.getDeleted() == null) {
-        customer.setDeleted(false);
+        customer.setActive(true);
+        customer.setActivated(false);
+        customer.setActivationCode(null);
+
+        if (customer.getDeleted() == null) {
+            customer.setDeleted(false);
+        }
+
+        Customer savedCustomer = customerRepository.save(customer);
+
+        try {
+            sendActivationCode(savedCustomer.getEmail());
+        } catch (Exception e) {
+            log.error("Failed to send activation email to {}: {}", savedCustomer.getEmail(), e.getMessage());
+        }
+
+        return savedCustomer;
     }
-
-    // Lưu customer - JPA sẽ tự động generate ID và set timestamps
-    Customer savedCustomer = customerRepository.save(customer);
-
-    // Gửi mail kích hoạt ngay sau khi tạo thành công
-    try {
-        sendActivationCode(savedCustomer.getEmail());
-    } catch (Exception e) {
-        System.err.println("Lỗi khi gửi mail kích hoạt: " + e.getMessage());
-    }
-
-    return savedCustomer;
-}
-
 
     @Override
     public Customer update(UUID id, Customer updatedCustomer) {
@@ -146,20 +138,17 @@ public Customer save(Customer customer) {
         return customerRepository.save(existingCustomer);
     }
 
- 
-
     @Override
-@Transactional
-public void deleteById(UUID id) {
-    Optional<Customer> customerOpt = customerRepository.findById(id);
-    if (customerOpt.isEmpty()) {
-        throw new RuntimeException("Customer not found with ID: " + id);
+    @Transactional
+    public void deleteById(UUID id) {
+        Optional<Customer> customerOpt = customerRepository.findById(id);
+        if (customerOpt.isEmpty()) {
+            throw new RuntimeException("Customer not found with ID: " + id);
+        }
+        Customer customer = customerOpt.get();
+        customer.setDeleted(true);
+        customerRepository.save(customer);
     }
-    Customer customer = customerOpt.get();
-    customer.setDeleted(true); // XÓA MỀM
-    customerRepository.save(customer);
-}
-
 
     @Override
     public boolean existsById(UUID id) {
@@ -171,7 +160,6 @@ public void deleteById(UUID id) {
         return customerRepository.existsByEmail(email);
     }
 
-    // --- Phần mới: gửi mã kích hoạt ---
     @Override
     public void sendActivationCode(String email) {
         Customer customer = customerRepository.findByEmail(email)
@@ -192,27 +180,27 @@ public void deleteById(UUID id) {
             message.setText("Mã kích hoạt của bạn là: " + activationCode + "\n" +
                     "Vui lòng kích hoạt tài khoản tại: http://localhost:3000/activate?email=" + email + "&code=" + activationCode);
             mailSender.send(message);
-            System.out.println("Mail kích hoạt đã gửi đến: " + email);
+            log.info("Activation email sent to: {}", email);
         } catch (Exception e) {
-            System.err.println("Lỗi gửi mail kích hoạt tới " + email + ": " + e.getMessage());
+            log.error("Failed to send activation email to {}: {}", email, e.getMessage());
             throw new RuntimeException("Gửi mail kích hoạt thất bại.");
         }
     }
 
-    // --- Phần mới: kích hoạt tài khoản ---
     @Override
     public boolean activateAccount(String email, String code) {
         Customer customer = customerRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy email: " + email));
 
         if (customer.getActivated()) {
-            return true; // Đã kích hoạt rồi
+            return true;
         }
 
         if (code.equals(customer.getActivationCode())) {
             customer.setActivated(true);
             customer.setActivationCode(null);
             customerRepository.save(customer);
+            log.info("Account activated successfully for: {}", email);
             return true;
         }
 
