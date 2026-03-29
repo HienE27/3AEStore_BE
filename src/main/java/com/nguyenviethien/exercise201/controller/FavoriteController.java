@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.nguyenviethien.exercise201.entity.Favorite;
 import com.nguyenviethien.exercise201.service.FavoriteService;
-import com.nguyenviethien.exercise201.service.JWT.JwtService;
+import com.nguyenviethien.exercise201.security.JWT.JwtService;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:3000")
@@ -42,6 +42,8 @@ public class FavoriteController {
                     .map(f -> f.getProduct().getId().toString())
                     .collect(Collectors.toList());
             return ResponseEntity.ok(Map.of("favorites", productIds));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(401).body(Map.of("error", "Invalid token"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

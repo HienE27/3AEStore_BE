@@ -1,8 +1,12 @@
 package com.nguyenviethien.exercise201.controller;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
+
+import com.nguyenviethien.exercise201.DTO.CustomerDto;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +34,7 @@ import com.nguyenviethien.exercise201.repository.CustomerRepository;
 import com.nguyenviethien.exercise201.security.LoginRequest;
 import com.nguyenviethien.exercise201.service.CustomerAddressService;
 import com.nguyenviethien.exercise201.service.CustomerService;
-import com.nguyenviethien.exercise201.service.JWT.JwtService;
+import com.nguyenviethien.exercise201.security.JWT.JwtService;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:3000")
@@ -66,13 +70,19 @@ public class CustomerController {
         Pageable pageable = PageRequest.of(page, size);
         Page<Customer> customerPage = customerService.findAll(pageable);
 
-        CustomerPageResponse response = new CustomerPageResponse(
-                customerPage.getContent(),
-                new CustomerPageResponse.PageMetadata(
-                        customerPage.getSize(),
-                        customerPage.getTotalElements(),
-                        customerPage.getTotalPages(),
-                        customerPage.getNumber()));
+        List<CustomerDto> customerDtos = customerPage.getContent().stream()
+                .map(this::toCustomerDto)
+                .collect(Collectors.toList());
+
+        CustomerPageResponse.PageMetadata pageMetadata = new CustomerPageResponse.PageMetadata(
+                customerPage.getSize(),
+                customerPage.getTotalElements(),
+                customerPage.getTotalPages(),
+                customerPage.getNumber());
+        CustomerPageResponse response = CustomerPageResponse.builder()
+                .customers(customerDtos)
+                .pageMetadata(pageMetadata)
+                .build();
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -260,8 +270,13 @@ public class CustomerController {
             Customer updated = customerService.update(id, customer);
             return ResponseEntity.ok(ApiResponse.success(updated));
         } catch (RuntimeException e) {
-            return ResponseEntity.notFound()
-                    .body(ApiResponse.error("Không tìm thấy khách hàng"));
+            if (e.getMessage() != null && e.getMessage().contains("Customer not found")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiResponse.error("Không tìm thấy khách hàng"));
+            }
+            log.warn("Update customer error: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(e.getMessage() != null ? e.getMessage() : "Dữ liệu không hợp lệ"));
         }
     }
 
@@ -269,7 +284,7 @@ public class CustomerController {
     public ResponseEntity<ApiResponse<?>> uploadAvatar(@PathVariable UUID id, @RequestBody java.util.Map<String, String> request) {
         try {
             if (!customerService.existsById(id)) {
-                return ResponseEntity.notFound()
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Không tìm thấy khách hàng"));
             }
 
@@ -292,7 +307,7 @@ public class CustomerController {
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<?>> deleteCustomer(@PathVariable UUID id) {
         if (!customerService.existsById(id)) {
-            return ResponseEntity.notFound()
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error("Không tìm thấy khách hàng"));
         }
         try {
@@ -312,7 +327,7 @@ public class CustomerController {
     public ResponseEntity<ApiResponse<List<CustomerAddress>>> getCustomerAddresses(@PathVariable UUID id) {
         try {
             if (!customerService.existsById(id)) {
-                return ResponseEntity.notFound()
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Không tìm thấy khách hàng"));
             }
             Customer customer = customerService.findById(id).get();
@@ -329,7 +344,7 @@ public class CustomerController {
     public ResponseEntity<ApiResponse<CustomerAddress>> getLatestCustomerAddress(@PathVariable UUID customerId) {
         try {
             if (!customerService.existsById(customerId)) {
-                return ResponseEntity.notFound()
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Không tìm thấy khách hàng"));
             }
 
@@ -337,7 +352,7 @@ public class CustomerController {
             List<CustomerAddress> addresses = customerAddressService.findByCustomer(customer);
 
             if (addresses.isEmpty()) {
-                return ResponseEntity.notFound()
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Không tìm thấy địa chỉ"));
             }
 
@@ -394,13 +409,13 @@ public class CustomerController {
             @PathVariable UUID addressId) {
         try {
             if (!customerService.existsById(customerId)) {
-                return ResponseEntity.notFound()
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Không tìm thấy khách hàng"));
             }
 
             Optional<CustomerAddress> addressOpt = customerAddressService.findById(addressId);
             if (addressOpt.isEmpty()) {
-                return ResponseEntity.notFound()
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Không tìm thấy địa chỉ"));
             }
 
@@ -524,5 +539,18 @@ public class CustomerController {
         public void setPostal_code(String postal_code) { this.postal_code = postal_code; }
         public String getCity() { return city; }
         public void setCity(String city) { this.city = city; }
+    }
+
+    private CustomerDto toCustomerDto(Customer c) {
+        return CustomerDto.builder()
+                .id(c.getId())
+                .firstName(c.getFirst_name())
+                .lastName(c.getLast_name())
+                .email(c.getEmail())
+                .userName(c.getUser_name())
+                .active(c.getActive())
+                .activated(c.getActivated())
+                .avatarUrl(c.getAvatarUrl())
+                .build();
     }
 }

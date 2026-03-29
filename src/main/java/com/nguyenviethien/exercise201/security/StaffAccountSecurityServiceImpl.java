@@ -1,4 +1,4 @@
-package com.nguyenviethien.exercise201.service.util;
+package com.nguyenviethien.exercise201.security;
 
 import com.nguyenviethien.exercise201.repository.StaffAccountRepository;
 import com.nguyenviethien.exercise201.entity.Role;
@@ -34,7 +34,6 @@ public class StaffAccountSecurityServiceImpl implements StaffAccountSecurityServ
         List<GrantedAuthority> authorities = new ArrayList<>();
         Role role = staffAccount.getRole();
         if (role != null) {
-            // Ensure authority uses ROLE_ prefix so Spring's hasRole checks work correctly.
             String roleName = role.getRole_name();
             if (roleName != null && !roleName.startsWith("ROLE_")) {
                 roleName = "ROLE_" + roleName;
@@ -47,5 +46,4 @@ public class StaffAccountSecurityServiceImpl implements StaffAccountSecurityServ
                 authorities
         );
     }
-    //
 }

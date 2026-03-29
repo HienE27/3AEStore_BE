@@ -1,7 +1,7 @@
 package com.nguyenviethien.exercise201.controller;
 
 import com.nguyenviethien.exercise201.DTO.TokenInfoResponse;
-import com.nguyenviethien.exercise201.service.JWT.JwtService;
+import com.nguyenviethien.exercise201.security.JWT.JwtService;
 
 import java.util.UUID;
 

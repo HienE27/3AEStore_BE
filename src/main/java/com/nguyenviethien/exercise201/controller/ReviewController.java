@@ -606,20 +606,20 @@ public class ReviewController {
                     .toList();
         }
         
-        return new ReviewDto(
-                r.getId(),
-                r.getContent(),
-                r.getRatingPoint(),
-                r.getRating(),
-                r.getCreatedAt(),
-                null, // product
-                c,
-                imgs,
-                r.getIsVerifiedPurchase(),
-                r.getIsAnonymous(),
-                r.getStatus().name(),
-                replies
-        );
+        return ReviewDto.builder()
+                .id(r.getId())
+                .content(r.getContent())
+                .ratingPoint(r.getRatingPoint())
+                .rating(r.getRating())
+                .createdAt(r.getCreatedAt())
+                .product(null)
+                .customer(c)
+                .images(imgs)
+                .isVerifiedPurchase(r.getIsVerifiedPurchase())
+                .isAnonymous(r.getIsAnonymous())
+                .status(r.getStatus() != null ? r.getStatus().name() : null)
+                .replies(replies)
+                .build();
     }
 
     // Mark review as helpful

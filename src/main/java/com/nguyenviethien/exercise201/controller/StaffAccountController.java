@@ -20,10 +20,10 @@ import org.springframework.web.bind.annotation.*;
 
 import com.nguyenviethien.exercise201.entity.StaffAccount;
 import com.nguyenviethien.exercise201.repository.StaffAccountRepository;
-import com.nguyenviethien.exercise201.security.JwtResponse;
+import com.nguyenviethien.exercise201.exception.ApiResponse;
 import com.nguyenviethien.exercise201.security.LoginRequest;
 import com.nguyenviethien.exercise201.service.StaffAccountService;
-import com.nguyenviethien.exercise201.service.JWT.JwtService;
+import com.nguyenviethien.exercise201.security.JWT.JwtService;
 
 @RestController
 @RequestMapping("/api/staff")
@@ -94,38 +94,42 @@ public class StaffAccountController {
         return ResponseEntity.ok().build();
     }
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
-    try {
-        // Đăng nhập với username và password
-        Authentication auth = staffAuthManager.authenticate(
-            new UsernamePasswordAuthenticationToken(request.getUser_name(), request.getPassword_hash())
-        );
+    public ResponseEntity<ApiResponse<?>> login(@RequestBody LoginRequest request) {
+        try {
+            Authentication auth = staffAuthManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.getUser_name(), request.getPassword_hash())
+            );
 
-        // Lấy thông tin Staff từ cơ sở dữ liệu
-        StaffAccount staff = staffAccountRepository.findByUser_name(request.getUser_name());
+            StaffAccount staff = staffAccountRepository.findByUser_name(request.getUser_name());
+            if (staff == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Không tìm thấy thông tin nhân viên."));
+            }
 
-        if (staff == null) {
-            return ResponseEntity.badRequest().body("Không tìm thấy thông tin nhân viên.");
+            if (auth.isAuthenticated()) {
+                String jwtToken = jwtService.generateToken(request.getUser_name());
+                Map<String, Object> data = new HashMap<>();
+                data.put("token", jwtToken);
+                data.put("id", staff.getId() != null ? staff.getId().toString() : null);
+                data.put("user_name", staff.getUser_name());
+                if (staff.getRole() != null) {
+                    data.put("role", staff.getRole().getRole_name());
+                }
+                Map<String, Object> user = new HashMap<>();
+                user.put("id", staff.getId() != null ? staff.getId().toString() : null);
+                user.put("user_name", staff.getUser_name());
+                if (staff.getRole() != null) {
+                    user.put("role", staff.getRole().getRole_name());
+                }
+                data.put("user", user);
+                return ResponseEntity.ok(ApiResponse.success("Đăng nhập thành công", data));
+            }
+        } catch (AuthenticationException e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Tên đăng nhập hoặc mật khẩu sai (nhân viên)"));
         }
-
-        // Nếu xác thực thành công, tạo token
-        if (auth.isAuthenticated()) {
-            // Tạo token cho staff
-            // String jwtToken = jwtService.generateTokenForCustomer(customer.getUser_name());
-            String jwtToken = jwtService.generateToken(request.getUser_name());
-            // Trả về token và thông tin khác nếu cần
-            Map<String, Object> response = new HashMap<>();
-            response.put("token", jwtToken);
-            // Trả về token trong response
-            return ResponseEntity.ok(response);
-        }
-    } catch (AuthenticationException e) {
-        return ResponseEntity.badRequest().body("Tên đăng nhập hoặc mật khẩu sai (nhân viên)");
+        return ResponseEntity.status(500).body(ApiResponse.error("Đã xảy ra lỗi không xác định."));
     }
-
-    // Nếu có lỗi xảy ra, trả về lỗi 500
-    return ResponseEntity.status(500).body("Đã xảy ra lỗi không xác định.");
-}
 
 
 }

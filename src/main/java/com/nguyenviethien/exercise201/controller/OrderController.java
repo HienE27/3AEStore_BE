@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.nguyenviethien.exercise201.DTO.CustomerPageResponse;
 import com.nguyenviethien.exercise201.entity.Customer;
+import com.nguyenviethien.exercise201.entity.Gallery;
 import com.nguyenviethien.exercise201.entity.Order;
 import com.nguyenviethien.exercise201.entity.OrderItem;
 import com.nguyenviethien.exercise201.entity.OrderStatus;
@@ -34,7 +35,7 @@ import com.nguyenviethien.exercise201.service.CustomerService;
 import com.nguyenviethien.exercise201.service.OrderItemService;
 import com.nguyenviethien.exercise201.service.OrderService;
 import com.nguyenviethien.exercise201.service.impl.OrderServiceImpl;
-import com.nguyenviethien.exercise201.service.JWT.JwtService;
+import com.nguyenviethien.exercise201.security.JWT.JwtService;
 import com.nguyenviethien.exercise201.repository.GalleryRepository;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -79,7 +80,7 @@ public class OrderController {
     }
 
     @PostMapping("/checkout")
-    public ResponseEntity<ApiResponse<?>> checkout(@RequestBody CheckoutRequest request) {
+    public ResponseEntity<?> checkout(@RequestBody CheckoutRequest request) {
         try {
             ResponseEntity<?> response = orderServiceImpl.checkoutWithCoupon(
                 UUID.fromString(request.getCustomerId()),
@@ -165,9 +166,17 @@ public class OrderController {
                 return ResponseEntity.badRequest()
                         .body(ApiResponse.error("Customer ID không được để trống"));
             }
-            
-            UUID custId = UUID.fromString(customerId);
-            Optional<Customer> customerOpt = customerService.findById(custId);
+
+            Optional<Customer> customerOpt;
+            try {
+                UUID custId = UUID.fromString(customerId);
+                customerOpt = customerService.findById(custId);
+            } catch (IllegalArgumentException e) {
+                log.warn("Customer ID is not a valid UUID: {}", customerId);
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Customer ID không đúng định dạng. Vui lòng đăng nhập lại hoặc dùng endpoint theo email."));
+            }
+
             if (customerOpt.isEmpty()) {
                 return ResponseEntity.badRequest()
                         .body(ApiResponse.error("Customer không tìm thấy"));
@@ -197,14 +206,54 @@ public class OrderController {
             
             return ResponseEntity.ok(ApiResponse.success(response));
             
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid argument: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Dữ liệu không hợp lệ"));
         } catch (Exception e) {
             log.error("Error getting customer orders: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Lỗi server"));
+                    .body(ApiResponse.error("Có lỗi không mong muốn xảy ra"));
+        }
+    }
+
+    /** Endpoint lấy đơn hàng theo email (fallback khi customerId từ token không phải UUID). */
+    @GetMapping("/customer/by-email/{email}")
+    public ResponseEntity<ApiResponse<?>> getCustomerOrdersByEmail(
+            @PathVariable String email,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        try {
+            if (email == null || email.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Email không được để trống"));
+            }
+            String identifier = email.trim();
+            Optional<Customer> customerOpt = customerService.findByEmail(identifier)
+                    .or(() -> customerService.findByEmailIgnoreCase(identifier))
+                    .or(() -> customerService.findByUserName(identifier));
+            if (customerOpt.isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Không tìm thấy khách hàng với email này"));
+            }
+            Customer customer = customerOpt.get();
+            if (page < 0) page = 0;
+            if (size <= 0) size = 10;
+            if (size > 100) size = 100;
+            Pageable pageable = PageRequest.of(page, size);
+            Page<Order> orderPage = orderRepository.findByCustomer(customer, pageable);
+            List<CustomerOrderDTO> customerOrders = orderPage.getContent().stream()
+                .map(this::convertToCustomerOrderDTO)
+                .collect(Collectors.toList());
+            Map<String, Object> response = new HashMap<>();
+            response.put("_embedded", Map.of("orders", customerOrders));
+            response.put("page", Map.of(
+                "size", orderPage.getSize(),
+                "totalElements", orderPage.getTotalElements(),
+                "totalPages", orderPage.getTotalPages(),
+                "number", orderPage.getNumber()
+            ));
+            return ResponseEntity.ok(ApiResponse.success(response));
+        } catch (Exception e) {
+            log.error("Error getting customer orders by email: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Có lỗi không mong muốn xảy ra"));
         }
     }
 
@@ -213,7 +262,7 @@ public class OrderController {
         try {
             Optional<Order> orderOpt = orderService.findById(orderId);
             if (orderOpt.isEmpty()) {
-                return ResponseEntity.notFound()
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Không tìm thấy đơn hàng"));
             }
 
@@ -252,7 +301,7 @@ public class OrderController {
         try {
             Optional<Order> orderOpt = orderService.findById(orderId);
             if (orderOpt.isEmpty()) {
-                return ResponseEntity.notFound()
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Không tìm thấy đơn hàng"));
             }
 
@@ -363,7 +412,7 @@ public class OrderController {
         try {
             Optional<Order> orderOpt = orderService.findById(orderId);
             if (orderOpt.isEmpty()) {
-                return ResponseEntity.notFound()
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Không tìm thấy đơn hàng"));
             }
 
@@ -383,7 +432,7 @@ public class OrderController {
         try {
             Optional<Order> orderOpt = orderService.findById(orderId);
             if (orderOpt.isEmpty()) {
-                return ResponseEntity.notFound()
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Không tìm thấy đơn hàng"));
             }
 
@@ -423,6 +472,10 @@ public class OrderController {
             }
             
             Order order = orderOpt.get();
+            if (order.getOrderStatus() == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Đơn hàng không có trạng thái hợp lệ"));
+            }
             UUID staffUUID = UUID.fromString(staffId);
             
             if (!"Pending".equalsIgnoreCase(order.getOrderStatus().getStatusName())) {
@@ -499,6 +552,10 @@ public class OrderController {
             }
             
             Order order = orderOpt.get();
+            if (order.getOrderStatus() == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Đơn hàng không có trạng thái hợp lệ"));
+            }
             UUID staffUUID = UUID.fromString(staffId);
             
             if (!"Approved".equalsIgnoreCase(order.getOrderStatus().getStatusName())) {
@@ -548,10 +605,14 @@ public class OrderController {
             
             order = orderService.save(order);
             log.info("Order shipped successfully: {}", orderId);
-            
-            return ResponseEntity.ok(ApiResponse.success("Đánh dấu đơn hàng đã giao thành công", 
-                    convertToAdminOrderDTO(order)));
-                    
+
+            try {
+                return ResponseEntity.ok(ApiResponse.success("Đánh dấu đơn hàng đã giao thành công",
+                        convertToAdminOrderDTO(order)));
+            } catch (Exception dtoEx) {
+                log.warn("Could not build full DTO after ship (order may be detached), returning minimal response: {}", dtoEx.getMessage());
+                return ResponseEntity.ok(ApiResponse.success("Đánh dấu đơn hàng đã giao thành công", null));
+            }
         } catch (IllegalArgumentException e) {
             log.warn("Invalid argument: {}", e.getMessage());
             return ResponseEntity.badRequest()
@@ -584,6 +645,10 @@ public class OrderController {
             }
             
             Order order = orderOpt.get();
+            if (order.getOrderStatus() == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Đơn hàng không có trạng thái hợp lệ"));
+            }
             UUID staffUUID = UUID.fromString(staffId);
             
             if (!"Shipped".equalsIgnoreCase(order.getOrderStatus().getStatusName())) {
@@ -641,7 +706,7 @@ public class OrderController {
     public ResponseEntity<ApiResponse<?>> adminCancelOrder(
             @PathVariable String orderId,
             @RequestParam String staffId,
-            @RequestBody Map<String, String> request) {
+            @RequestBody(required = false) Map<String, String> request) {
         try {
             if (orderId == null || orderId.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
@@ -659,6 +724,10 @@ public class OrderController {
             }
 
             Order order = orderOpt.get();
+            if (order.getOrderStatus() == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Đơn hàng không có trạng thái hợp lệ"));
+            }
             UUID staffUUID = UUID.fromString(staffId);
 
             if (order.getOrderDeliveredCustomerDate() != null) {
@@ -670,10 +739,10 @@ public class OrderController {
                         .body(ApiResponse.error("Đơn hàng đã bị hủy"));
             }
 
-            String reason = request.get("reason");
-            if (reason == null || reason.trim().isEmpty()) {
-                return ResponseEntity.badRequest()
-                        .body(ApiResponse.error("Lý do hủy không được để trống"));
+            String reason = (request != null && request.get("reason") != null)
+                    ? request.get("reason").trim() : "";
+            if (reason.isEmpty()) {
+                reason = "Hủy bởi quản trị";
             }
 
             StaffAccount staff = staffAccountRepository.findById(staffUUID)
@@ -797,9 +866,9 @@ public class OrderController {
     private CustomerOrderDTO convertToCustomerOrderDTO(Order order) {
         CustomerOrderDTO dto = new CustomerOrderDTO();
         dto.setId(order.getId());
-        dto.setCreated_at(order.getCreated_at().toString());
-        dto.setTotalPrice(order.getTotalPrice().doubleValue());
-        dto.setStatus(order.getOrderStatus().getStatusName().toLowerCase());
+        dto.setCreated_at(order.getCreated_at() != null ? order.getCreated_at().toString() : null);
+        dto.setTotalPrice(order.getTotalPrice() != null ? order.getTotalPrice().doubleValue() : 0);
+        dto.setStatus(order.getOrderStatus() != null ? order.getOrderStatus().getStatusName().toLowerCase() : "pending");
         dto.setPaymentMethod(order.getPaymentMethod() != null ? order.getPaymentMethod() : "COD");
         dto.setShippingAddress(order.getShippingAddress() != null ? order.getShippingAddress() : "");
         dto.setOrderApprovedAt(order.getOrderApprovedAt() != null ? order.getOrderApprovedAt().toString() : null);
@@ -848,7 +917,7 @@ public class OrderController {
     private OrderTrackingDTO convertToOrderTrackingDTO(Order order) {
         OrderTrackingDTO dto = new OrderTrackingDTO();
         dto.setOrderId(order.getId());
-        dto.setStatus(order.getOrderStatus().getStatusName().toLowerCase());
+        dto.setStatus(order.getOrderStatus() != null ? order.getOrderStatus().getStatusName().toLowerCase() : "pending");
         dto.setTrackingNumber(order.getTrackingNumber() != null ? order.getTrackingNumber() : "TN" + order.getId().substring(0, 8).toUpperCase());
         
         List<OrderStatusHistoryDTO> statusHistory = List.of(

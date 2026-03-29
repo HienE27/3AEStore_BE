@@ -1,9 +1,7 @@
-package com.nguyenviethien.exercise201.service.util;
+package com.nguyenviethien.exercise201.security;
 
-// import com.nguyenviethien.exercise201.repository.RoleRepository;
 import com.nguyenviethien.exercise201.repository.CustomerRepository;
 import com.nguyenviethien.exercise201.repository.RoleRepository;
-// import com.nguyenviethien.exercise201.entity.Role;
 import com.nguyenviethien.exercise201.entity.Customer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.GrantedAuthority;
@@ -11,13 +9,10 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class CustomerSecurityServiceImpl implements CustomerSecurityService {
@@ -29,21 +24,19 @@ public class CustomerSecurityServiceImpl implements CustomerSecurityService {
         return customerRepository.findByUser_name(user_name);
     }
 
-    // Khi "dap" ở Security Configuration được gọi thì nó sẽ chay hàm này để lấy ra user trong csdl
     @Override
     public UserDetails loadUserByUsername(String user_name) throws UsernameNotFoundException {
         Customer customer = findByUserName(user_name);
-    if (customer == null) {
-        throw new UsernameNotFoundException("Tài khoản không tồn tại!");
+        if (customer == null) {
+            throw new UsernameNotFoundException("Tài khoản không tồn tại!");
+        }
+
+        List<GrantedAuthority> authorities = new ArrayList<>();
+
+        return new org.springframework.security.core.userdetails.User(
+            customer.getUser_name(),
+            customer.getPassword_hash(),
+            authorities
+        );
     }
-
-    // Tạo quyền cho Customer. Đây là ví dụ, bạn có thể tùy chỉnh thêm quyền của khách hàng nếu cần
-    List<GrantedAuthority> authorities = new ArrayList<>();  // Không có quyền đặc biệt cho customer
-
-    return new org.springframework.security.core.userdetails.User(
-        customer.getUser_name(),
-        customer.getPassword_hash(),
-        authorities
-    );
-}
 }

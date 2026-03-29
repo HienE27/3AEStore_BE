@@ -22,6 +22,10 @@ public interface CustomerService {
 
     // Tìm khách hàng theo email
     Optional<Customer> findByEmail(String email);
+
+    Optional<Customer> findByEmailIgnoreCase(String email);
+
+    Optional<Customer> findByUserName(String userName);
     
     List<Customer> searchCustomers(String searchTerm);
     Optional<Customer> findByEmailSingle(String email);

@@ -1,4 +1,4 @@
-package com.nguyenviethien.exercise201.service.JWT;
+package com.nguyenviethien.exercise201.security.JWT;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -14,7 +14,7 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.nguyenviethien.exercise201.service.util.StaffAccountSecurityService;
+import com.nguyenviethien.exercise201.security.StaffAccountSecurityService;
 import com.nguyenviethien.exercise201.repository.StaffAccountRepository;
 import com.nguyenviethien.exercise201.entity.StaffAccount;
 import com.nguyenviethien.exercise201.entity.Role;
@@ -53,7 +53,6 @@ public class JwtFilter extends OncePerRequestFilter {
                 System.out.println("🔐 JWT: Không tìm thấy Bearer token");
             }
             
-            // Chỉ xử lý JWT nếu có token và chưa được xác thực
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 try {
                     UserDetails userDetails = null;
@@ -64,7 +63,6 @@ public class JwtFilter extends OncePerRequestFilter {
                                 + " authorities: " + userDetails.getAuthorities());
                         }
                     } catch (Exception ex) {
-                        // fallback: try to load by id claim from token
                         try {
                             UUID idFromToken = jwtService.extractId(token);
                             if (idFromToken != null) {
@@ -108,16 +106,13 @@ public class JwtFilter extends OncePerRequestFilter {
 
                 } catch (Exception authException) {
                     System.out.println("🔐 JWT: Lỗi xác thực: " + authException.getMessage());
-                    // Không throw exception, chỉ log và tiếp tục
                 }
             }
             
         } catch (Exception e) {
             System.out.println("🔐 JWT Filter exception: " + e.getMessage());
-            // Không throw exception, để Spring Security xử lý
         }
         
-        // LUÔN LUÔN gọi filterChain.doFilter()
         filterChain.doFilter(request, response);
     }
 
@@ -126,12 +121,22 @@ public class JwtFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String method = request.getMethod();
         
-        // Bỏ qua JWT cho các endpoint công khai
         String[] publicPaths = {
             "/api/customers/login",
             "/api/staff/login",
+            "/api/products",
+            "/api/categories",
+            "/api/home",
+            "/api/news",
+            "/api/slideshow",
             "/admin",
-            "/error"
+            "/error",
+            "/uploads",
+            "/login",
+            "/favicon.ico",
+            "/oauth2",
+            "/assets",
+            "/gallerys"
         };
         
         for (String publicPath : publicPaths) {
@@ -141,13 +146,11 @@ public class JwtFilter extends OncePerRequestFilter {
             }
         }
         
-        // Bỏ qua JWT cho GET requests đến /api/news (cho phép xem tin tức mà không cần đăng nhập)
         if (path.startsWith("/api/news") && "GET".equals(method)) {
             System.out.println("🔐 JWT: Cho phép GET " + path + " mà không cần xác thực");
-            return false; // Vẫn qua filter nhưng không yêu cầu token
+            return true;
         }
         
-        // Bỏ qua cho OPTIONS (CORS preflight)
         if ("OPTIONS".equals(method)) {
             System.out.println("🔐 JWT: Bỏ qua filter cho OPTIONS request");
             return true;

@@ -21,8 +21,11 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
 
     boolean existsByEmail(String email);
 
-    @Query("SELECT c FROM Customer c WHERE c.user_name = :user_name")
+    @Query("SELECT c FROM Customer c WHERE c.user_name = :user_name AND c.deleted = false")
     Customer findByUser_name(@Param("user_name") String user_name);
+
+    @Query("SELECT c FROM Customer c WHERE c.user_name = :user_name AND c.deleted = false")
+    Optional<Customer> findByUser_nameOptional(@Param("user_name") String user_name);
 
     // Thêm query method trong CustomerRepository để chỉ lấy customer chưa bị xóa
    @Query("SELECT c FROM Customer c WHERE c.deleted = false")
@@ -34,6 +37,8 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
 
     // Find by email
     Optional<Customer> findByEmail(String email);
+
+    Optional<Customer> findByEmailIgnoreCase(String email);
     
     // Find by email containing (case insensitive)
     List<Customer> findByEmailContainingIgnoreCase(String email);

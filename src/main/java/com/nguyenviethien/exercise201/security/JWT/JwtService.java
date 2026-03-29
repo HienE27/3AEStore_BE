@@ -1,4 +1,4 @@
-package com.nguyenviethien.exercise201.service.JWT;
+package com.nguyenviethien.exercise201.security.JWT;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -36,16 +36,14 @@ public class JwtService {
     @Autowired
     private CustomerRepository customerRepository;
     
-    // Tạo jwt dựa trên username (tạo thông tin cần trả về cho FE khi đăng nhập thành công)
     public String generateToken(String username) {
         Map<String, Object> claims = new HashMap<>();
         StaffAccount staffAccount = staffAccountRepository.findByUser_name(username);
         if (staffAccount != null) {
-            // store id as String to ensure consistent extraction
             if (staffAccount.getId() != null) claims.put("id", staffAccount.getId().toString());
             claims.put("lastName", staffAccount.getLast_name());
             claims.put("Active", staffAccount.isActive());
-            claims.put("userType", "STAFF"); // Thêm để phân biệt loại user
+            claims.put("userType", "STAFF");
             Role role = staffAccount.getRole();
             if (role != null) {
                 if (role.getRole_name().equals("ADMIN")) {
@@ -62,17 +60,14 @@ public class JwtService {
         Map<String, Object> claims = new HashMap<>();
         Customer customer = customerRepository.findByUser_name(username);
         if (customer != null) {
-            //claims.put("id", customer.getId());
-            claims.put("id", customer.getId().toString()); // Đảm bảo dùng ID từ database
-            //claims.put("customerId", customer.getId().toString());
+            claims.put("id", customer.getId().toString());
             claims.put("email", customer.getEmail());
             claims.put("role", "CUSTOMER");
-            claims.put("userType", "CUSTOMER"); // Thêm để phân biệt loại user
+            claims.put("userType", "CUSTOMER");
         }
         return createToken(claims, username);
     }
 
-    // Methods mới cần thiết cho compatibility với OrderService
     public String generateToken(UserDetails userDetails) {
         return generateToken(new HashMap<>(), userDetails);
     }
@@ -82,10 +77,9 @@ public class JwtService {
     }
 
     public String generateTokenForStaff(String staffUserName) {
-        return generateToken(staffUserName); // Sử dụng method hiện có
+        return generateToken(staffUserName);
     }
 
-    // Toạ jwt với các claims đã chọn
     private String createToken(Map<String, Object> claims, String username) {
         return Jwts.builder()
                 .setClaims(claims)
@@ -96,45 +90,37 @@ public class JwtService {
                 .compact();
     }
 
-    // Lấy key_secret
     private Key getSigneKey() {
         byte[] keyByte = Decoders.BASE64.decode(KEY_SECRET);
         return Keys.hmacShaKeyFor(keyByte);
     }
 
-    // Trích xuất thông tin (lấy ra tất cả thông số)
     private Claims extractAllClaims(String token) {
         return Jwts.parser().setSigningKey(getSigneKey()).parseClaimsJws(token).getBody();
     }
 
-    // Trích xuất thông tin cụ thể nhưng triển khai tổng quát (Method Generic)
     public <T> T extractClaims(String token, Function<Claims, T> claimsTFunction) {
         final Claims claims = extractAllClaims(token);
         return claimsTFunction.apply(claims);
     }
 
-    // Lấy ra thời gian hết hạn
     public Date extractExpiration(String token) {
         return extractClaims(token, Claims::getExpiration);
     }
 
-    // Lấy ra username
     public String extractUsername(String token) {
         return extractClaims(token, Claims::getSubject);
     }
 
-    // Kiểm tra token đó hết hạn chưa
     private Boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
     }
 
-    // Kiểm tra tính hợp lệ của token
     public Boolean validateToken(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
         return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
     }
 
-    // Method mới cho OrderService compatibility
     public Boolean isTokenValid(String token, UserDetails userDetails) {
         return validateToken(token, userDetails);
     }
@@ -157,12 +143,10 @@ public class JwtService {
         });
     }
 
-    // Method để lấy user type từ token
     public String getUserTypeFromToken(String token) {
         return extractClaims(token, claims -> claims.get("userType", String.class));
     }
 
-    // Method để lấy role từ token
     public String getRoleFromToken(String token) {
         return extractClaims(token, claims -> claims.get("role", String.class));
     }

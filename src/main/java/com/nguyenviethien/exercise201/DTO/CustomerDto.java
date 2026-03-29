@@ -22,4 +22,16 @@ public class CustomerDto {
     private Boolean active;
     private Boolean activated;
     private String avatarUrl;
+
+    /** Constructor for minimal DTO (e.g. review author). */
+    public CustomerDto(UUID id, String firstName, String lastName) {
+        this.id = id;
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.email = null;
+        this.userName = null;
+        this.active = null;
+        this.activated = null;
+        this.avatarUrl = null;
+    }
 }

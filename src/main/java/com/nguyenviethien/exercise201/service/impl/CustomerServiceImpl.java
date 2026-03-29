@@ -63,6 +63,17 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    public Optional<Customer> findByEmailIgnoreCase(String email) {
+        return customerRepository.findByEmailIgnoreCase(email);
+    }
+
+    @Override
+    public Optional<Customer> findByUserName(String userName) {
+        if (userName == null || userName.isBlank()) return Optional.empty();
+        return customerRepository.findByUser_nameOptional(userName.trim());
+    }
+
+    @Override
     public List<Customer> searchCustomers(String searchTerm) {
         return customerRepository.findByEmailContainingIgnoreCase(searchTerm);
     }
@@ -122,11 +133,24 @@ public class CustomerServiceImpl implements CustomerService {
         Customer existingCustomer = customerRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Customer not found with ID: " + id));
 
-        existingCustomer.setFirst_name(updatedCustomer.getFirst_name());
-        existingCustomer.setLast_name(updatedCustomer.getLast_name());
-        existingCustomer.setEmail(updatedCustomer.getEmail());
+        // Chỉ cập nhật các field được gửi lên (không ghi đè bằng null để tránh vi phạm ràng buộc DB)
+        if (updatedCustomer.getFirst_name() != null && !updatedCustomer.getFirst_name().trim().isEmpty()) {
+            existingCustomer.setFirst_name(updatedCustomer.getFirst_name());
+        }
+        if (updatedCustomer.getLast_name() != null && !updatedCustomer.getLast_name().trim().isEmpty()) {
+            existingCustomer.setLast_name(updatedCustomer.getLast_name());
+        }
+        if (updatedCustomer.getEmail() != null && !updatedCustomer.getEmail().trim().isEmpty()) {
+            existingCustomer.setEmail(updatedCustomer.getEmail());
+        }
+        if (updatedCustomer.getUser_name() != null && !updatedCustomer.getUser_name().trim().isEmpty()) {
+            existingCustomer.setUser_name(updatedCustomer.getUser_name());
+        }
+        // gender có thể null (xóa giới tính)
         existingCustomer.setGender(updatedCustomer.getGender());
-        existingCustomer.setUser_name(updatedCustomer.getUser_name());
+
+        // phone_number có thể null (xóa số điện thoại)
+        existingCustomer.setPhoneNumber(updatedCustomer.getPhoneNumber());
 
         if (updatedCustomer.getPassword_hash() != null && !updatedCustomer.getPassword_hash().isEmpty()) {
             String encodedPassword = passwordEncoder.encode(updatedCustomer.getPassword_hash());

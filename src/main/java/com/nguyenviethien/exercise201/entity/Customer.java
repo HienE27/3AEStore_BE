@@ -49,6 +49,10 @@ public class Customer {
     @Column(name = "gender")
     private String gender;
 
+    /** Không map xuống DB nếu bảng customers chưa có cột phone_number. Thêm cột sau: ALTER TABLE customers ADD COLUMN phone_number VARCHAR(15) NULL; rồi đổi thành @Column(name = "phone_number", length = 15) */
+    @Transient
+    private String phoneNumber;
+
     @Column(nullable = false, updatable = false)
     @CreationTimestamp
     @Temporal(TemporalType.TIMESTAMP)

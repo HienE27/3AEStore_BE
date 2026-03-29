@@ -17,16 +17,24 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.beans.factory.annotation.Value;
 
-import com.nguyenviethien.exercise201.service.JWT.JwtFilter;
-import com.nguyenviethien.exercise201.service.util.CustomerSecurityService;
-import com.nguyenviethien.exercise201.service.util.StaffAccountSecurityService;
+import com.nguyenviethien.exercise201.security.JWT.JwtFilter;
+import com.nguyenviethien.exercise201.security.CustomerSecurityService;
+import com.nguyenviethien.exercise201.security.StaffAccountSecurityService;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 @Configuration
 public class SecurityConfiguration {
+
+    @Value("${APP_BASE_URL:http://localhost:3000}")
+    private String frontendBaseUrl;
+
     @Autowired
     @Lazy
     private JwtFilter jwtFilter;
@@ -85,9 +93,10 @@ public class SecurityConfiguration {
             .csrf(AbstractHttpConfigurer::disable)
             .userDetailsService(staffDetailsService);
 
-        // Configure OAuth2 login success handler
+        // Configure OAuth2 login: success -> redirect FE với token; failure -> redirect FE với error (tránh trang "Invalid credentials")
         http.oauth2Login(oauth2 -> oauth2
                 .successHandler(oauth2LoginSuccessHandler())
+                .failureHandler(oauth2FailureHandler())
         );
 
         // CORS configuration - ENHANCED
@@ -110,6 +119,16 @@ public class SecurityConfiguration {
     @Bean
     public AuthenticationSuccessHandler oauth2LoginSuccessHandler() {
         return new OAuth2LoginSuccessHandler();
+    }
+
+    @Bean
+    public AuthenticationFailureHandler oauth2FailureHandler() {
+        return (request, response, exception) -> {
+            String message = exception != null && exception.getMessage() != null
+                    ? exception.getMessage() : "invalid_credentials";
+            response.sendRedirect(frontendBaseUrl + "/oauth2/callback?error=oauth_error&message="
+                    + URLEncoder.encode(message, StandardCharsets.UTF_8));
+        };
     }
 
     @Bean

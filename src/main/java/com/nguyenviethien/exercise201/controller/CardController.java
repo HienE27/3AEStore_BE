@@ -17,7 +17,7 @@ import com.nguyenviethien.exercise201.service.CardItemService;
 import com.nguyenviethien.exercise201.service.CardService;
 import com.nguyenviethien.exercise201.service.CustomerService;
 import com.nguyenviethien.exercise201.service.ProductService;
-import com.nguyenviethien.exercise201.service.JWT.JwtService;
+import com.nguyenviethien.exercise201.security.JWT.JwtService;
 
 import jakarta.servlet.http.HttpServletRequest;
 

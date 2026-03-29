@@ -87,7 +87,7 @@ public class ProductController {
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<?>> createProduct(@RequestBody JsonNode productJson, @RequestParam UUID staffId) {
+    public ResponseEntity<?> createProduct(@RequestBody JsonNode productJson, @RequestParam UUID staffId) {
         try {
             log.info("Creating product with staffId: {}", staffId);
 
@@ -120,7 +120,7 @@ public class ProductController {
     }
 
     @PostMapping("/create")
-    public ResponseEntity<ApiResponse<?>> createProductAlternative(@RequestBody JsonNode jsonData, @RequestParam UUID staffId) {
+    public ResponseEntity<?> createProductAlternative(@RequestBody JsonNode jsonData, @RequestParam UUID staffId) {
         try {
             log.debug("Alternative create endpoint called with staffId: {}", staffId);
 
@@ -144,7 +144,7 @@ public class ProductController {
     }
 
     @PutMapping("/{productId}")
-    public ResponseEntity<ApiResponse<?>> updateProduct(
+    public ResponseEntity<?> updateProduct(
             @PathVariable UUID productId,
             @RequestParam("staffId") UUID staffId,
             @RequestBody JsonNode productJson) {
@@ -171,7 +171,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{productId}")
-    public ResponseEntity<ApiResponse<?>> deleteProduct(@PathVariable UUID productId) {
+    public ResponseEntity<?> deleteProduct(@PathVariable UUID productId) {
         try {
             log.info("Deleting product ID: {}", productId);
 
@@ -292,7 +292,6 @@ public class ProductController {
                     .collect(Collectors.toList());
 
             int totalElements = filteredProducts.size();
-            int totalPages = (int) Math.ceil((double) totalElements / size);
             int start = page * size;
             int end = Math.min(start + size, totalElements);
             List<Product> pagedProducts = start < totalElements ? filteredProducts.subList(start, end) : List.of();
